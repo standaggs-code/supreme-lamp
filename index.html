@@ -91,9 +91,21 @@
         </div>
       </div>
 
+      <!-- Toggle Button Row -->
+      <div class="w-full flex justify-center pb-1 mt-[-4px]">
+        <button id="toggleGamesBtn" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-court-card border border-court-border text-[10px] font-mono font-bold text-court-muted hover:text-white transition-colors shadow-sm relative z-10">
+          <span id="toggleGamesText">SHOW SCORES</span>
+          <i data-lucide="chevron-down" id="toggleGamesIcon" class="w-3.5 h-3.5 transition-transform duration-300"></i>
+        </button>
+      </div>
+
       <!-- Bottom Row: Today's Games Carousel -->
-      <div class="pb-3 flex flex-wrap items-center gap-2" id="gamesTicker">
-        <span class="text-[11px] text-court-muted font-mono animate-pulse">Loading today's games...</span>
+      <div id="gamesTickerWrapper" class="grid transition-all duration-300 ease-in-out" style="grid-template-rows: 0fr;">
+        <div class="overflow-hidden">
+          <div class="pb-3 flex flex-wrap items-center gap-2" id="gamesTicker">
+            <span class="text-[11px] text-court-muted font-mono animate-pulse">Loading today's games...</span>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -383,7 +395,8 @@
       cachedPeriod: 1,
       cachedIsLive: false,
       cachedStats: { away: null, home: null },
-      cachedLeadersHtml: null
+      cachedLeadersHtml: null,
+      isTickerExpanded: window.innerWidth >= 640
     };
 
     // --- DOM Elements ---
@@ -393,7 +406,10 @@
       teamDropdownMenu: document.getElementById('teamDropdownMenu'),
       selectedTeamAvatar: document.getElementById('selectedTeamAvatar'),
       teamAccentStrip: document.getElementById('teamAccentStrip'),
+      gamesTickerWrapper: document.getElementById('gamesTickerWrapper'),
       gamesTicker: document.getElementById('gamesTicker'),
+      toggleGamesBtn: document.getElementById('toggleGamesBtn'),
+      toggleGamesText: document.getElementById('toggleGamesText'),
       livePill: document.getElementById('livePill'),
       livePillText: document.getElementById('livePillText'),
       installAppBtn: document.getElementById('installAppBtn'),
@@ -459,6 +475,7 @@
       initTeamDropdown();
       setupEventListeners();
       startPollingLoop();
+      updateTickerState();
     }
 
     function initPWA() {
@@ -569,6 +586,19 @@
       // Apply a subtle, immersive radial background glow using the team's primary hex color
       // (Adding '20' to the hex string applies ~12% opacity)
       document.body.style.background = `radial-gradient(circle at top center, ${team.color}20 0%, #0B0E14 45%, #0B0E14 100%)`;
+    }
+
+    function updateTickerState() {
+      const icon = document.getElementById('toggleGamesIcon');
+      if (STATE.isTickerExpanded) {
+        dom.gamesTickerWrapper.style.gridTemplateRows = '1fr';
+        if (icon) icon.classList.add('rotate-180');
+        if (dom.toggleGamesText) dom.toggleGamesText.innerText = 'HIDE SCORES';
+      } else {
+        dom.gamesTickerWrapper.style.gridTemplateRows = '0fr';
+        if (icon) icon.classList.remove('rotate-180');
+        if (dom.toggleGamesText) dom.toggleGamesText.innerText = 'SHOW SCORES';
+      }
     }
 
     // --- Caching Linescores ---
@@ -1175,6 +1205,11 @@
         if (!dom.teamDropdownMenu.contains(e.target) && !dom.teamDropdownBtn.contains(e.target)) {
           dom.teamDropdownMenu.classList.add('hidden');
         }
+      });
+
+      dom.toggleGamesBtn.addEventListener('click', () => {
+        STATE.isTickerExpanded = !STATE.isTickerExpanded;
+        updateTickerState();
       });
 
       document.querySelectorAll('.filter-tab').forEach(btn => {
