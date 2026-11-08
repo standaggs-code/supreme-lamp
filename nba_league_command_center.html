@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NBA League Command Center</title>
+  
+  <!-- PWA Manifest & Icons -->
+  <link rel="manifest" href="standings-manifest.json" id="pwaManifest">
+  <meta name="theme-color" content="#0B0E14">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap');
+    
+    body { 
+      font-family: 'Inter', sans-serif; 
+      background-color: #0B0E14; 
+      color: #E2E8F0; 
+      overflow-x: hidden;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #2D3748; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4A5568; }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Gradient Background Aura */
+    .bg-aura {
+      position: fixed;
+      top: -20%; left: -10%; right: -10%;
+      height: 60vh;
+      background: radial-gradient(ellipse at top, rgba(29, 78, 216, 0.15) 0%, rgba(11, 14, 20, 0) 70%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* View Toggle Classes */
+    .basic-view .adv-col { display: none; }
+    .advanced-view .adv-col { display: table-cell; }
+
+    /* Modal Animation */
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .modal-animate { animation: modalFadeIn 0.2s ease-out forwards; }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            court: {
+              dark: '#11151E',
+              card: '#1A202C',
+              border: '#2D3748',
+              gold: '#F6A800'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="min-h-screen flex flex-col relative basic-view">
+  <div class="bg-aura"></div>
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-court-dark/80 backdrop-blur-xl border-b border-court-border shadow-lg">
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-800 flex items-center justify-center shadow-lg border border-blue-500/30">
+          <i data-lucide="trophy" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-black text-white leading-tight uppercase tracking-wide">League Command Center</h1>
+          <div class="text-[10px] font-mono text-blue-400 flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+            LIVE STANDINGS & SCORES
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <div class="hidden sm:flex items-center gap-2 text-xs font-mono text-gray-500">
+          <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+          <span id="lastUpdatedLabel">Updating...</span>
+        </div>
+        <button id="refreshBtn" class="p-2 rounded-lg bg-court-card border border-court-border hover:bg-white/10 transition text-gray-300 flex items-center gap-2" title="Force Refresh">
+          <i data-lucide="refresh-cw" class="w-4 h-4" id="refreshIcon"></i>
+          <span class="hidden sm:inline text-xs font-bold font-mono">SYNC</span>
+        </button>
+      </div>
+    </div>
+    <div class="h-0.5 w-full bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600"></div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-grow max-w-[1400px] mx-auto w-full px-4 sm:px-6 py-8 relative z-10">
+    
+    <div id="loadingState" class="flex flex-col items-center justify-center h-64 text-gray-500 gap-4">
+      <i data-lucide="loader-2" class="w-10 h-10 animate-spin text-blue-500"></i>
+      <span class="font-mono text-sm tracking-widest uppercase">Compiling League Data...</span>
+    </div>
+
+    <!-- Container for Conferences -->
+    <div id="standingsContainer" class="hidden flex-col xl:flex-row gap-8">
+      
+      <!-- Eastern Conference -->
+      <section class="flex-1 min-w-0 bg-court-dark/50 border border-court-border rounded-2xl p-4 sm:p-6 shadow-xl">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-blue-900/40 border border-blue-500/30 flex items-center justify-center text-blue-400 font-black text-sm shadow-[0_0_10px_rgba(59,130,246,0.2)]">E</div>
+          <h2 class="text-xl font-black text-white uppercase tracking-widest">Eastern Conference</h2>
+        </div>
+        <div class="overflow-x-auto no-scrollbar">
+          <table class="w-full text-left border-collapse min-w-[450px]">
+            <thead>
+              <tr class="text-[10px] font-mono text-gray-500 uppercase tracking-widest border-b border-court-border">
+                <th class="pb-2 font-bold w-8 text-center">Rank</th>
+                <th class="pb-2 font-bold">Team</th>
+                <th class="pb-2 font-bold text-center">W-L</th>
+                <th class="pb-2 font-bold text-center">GB</th>
+                <th class="pb-2 font-bold text-center">STRK</th>
+                <th class="pb-2 font-bold text-center adv-col">PCT</th>
+                <th class="pb-2 font-bold text-center adv-col">HOME</th>
+                <th class="pb-2 font-bold text-center adv-col">AWAY</th>
+                <th class="pb-2 font-bold text-center adv-col">CONF</th>
+                <th class="pb-2 font-bold text-center adv-col">PPG</th>
+                <th class="pb-2 font-bold text-center adv-col">OPP</th>
+                <th class="pb-2 font-bold text-center adv-col">DIFF</th>
+                <th class="pb-2 font-bold text-right pr-2 min-w-[140px]">Next Game / Status</th>
+              </tr>
+            </thead>
+            <tbody id="eastTableBody">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Western Conference -->
+      <section class="flex-1 min-w-0 mt-8 xl:mt-0 bg-court-dark/50 border border-court-border rounded-2xl p-4 sm:p-6 shadow-xl">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-red-900/40 border border-red-500/30 flex items-center justify-center text-red-400 font-black text-sm shadow-[0_0_10px_rgba(239,68,68,0.2)]">W</div>
+          <h2 class="text-xl font-black text-white uppercase tracking-widest">Western Conference</h2>
+        </div>
+        <div class="overflow-x-auto no-scrollbar">
+          <table class="w-full text-left border-collapse min-w-[450px]">
+            <thead>
+              <tr class="text-[10px] font-mono text-gray-500 uppercase tracking-widest border-b border-court-border">
+                <th class="pb-2 font-bold w-8 text-center">Rank</th>
+                <th class="pb-2 font-bold">Team</th>
+                <th class="pb-2 font-bold text-center">W-L</th>
+                <th class="pb-2 font-bold text-center">GB</th>
+                <th class="pb-2 font-bold text-center">STRK</th>
+                <th class="pb-2 font-bold text-center adv-col">PCT</th>
+                <th class="pb-2 font-bold text-center adv-col">HOME</th>
+                <th class="pb-2 font-bold text-center adv-col">AWAY</th>
+                <th class="pb-2 font-bold text-center adv-col">CONF</th>
+                <th class="pb-2 font-bold text-center adv-col">PPG</th>
+                <th class="pb-2 font-bold text-center adv-col">OPP</th>
+                <th class="pb-2 font-bold text-center adv-col">DIFF</th>
+                <th class="pb-2 font-bold text-right pr-2 min-w-[140px]">Next Game / Status</th>
+              </tr>
+            </thead>
+            <tbody id="westTableBody">
+              <!-- Populated via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Footer Controls -->
+  <div class="flex justify-center mt-2 mb-6 relative z-10">
+    <button id="toggleViewBtn" class="px-5 py-2.5 bg-court-dark/80 backdrop-blur-md border border-court-border rounded-full text-xs font-bold font-mono hover:bg-white/10 transition flex items-center gap-2 shadow-lg text-blue-400">
+      <i data-lucide="table" class="w-4 h-4"></i>
+      <span id="toggleViewText">SWITCH TO ADVANCED VIEW</span>
+    </button>
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-court-border bg-court-dark py-4 text-center text-xs font-mono text-gray-600 relative z-10 mt-auto">
+    Automated 30-second polling • Data provided by ESPN APIs
+  </footer>
+
+  <!-- Roster Modal Overlay -->
+  <div id="rosterModal" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+    <!-- Modal Content Box -->
+    <div class="bg-court-dark border border-court-border rounded-2xl w-full max-w-2xl max-h-[85vh] shadow-2xl flex flex-col modal-animate overflow-hidden relative">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between p-4 sm:p-5 border-b border-court-border bg-[#151a23]">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center p-1 border border-white/10">
+            <img id="modalTeamLogo" src="" alt="Team Logo" class="max-w-full max-h-full object-contain">
+          </div>
+          <div>
+            <h3 id="modalTeamName" class="text-lg font-black text-white leading-none">Team Roster</h3>
+            <span class="text-[11px] font-mono text-gray-400 uppercase tracking-widest mt-1 block">Active Players</span>
+          </div>
+        </div>
+        <button onclick="closeRosterModal()" class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Roster Table Area -->
+      <div id="modalContentArea" class="flex-grow overflow-y-auto custom-scrollbar bg-court-dark">
+        <!-- Injected via JS -->
+      </div>
+      
+    </div>
+  </div>
+
+  <script>
+    // --- Application State ---
+    const STATE = {
+      eastTeams: [],
+      westTeams: [],
+      liveGames: {}, // Mapping of teamId -> Active Game Data
+      nextEvents: {}, // Mapping of teamId -> Next scheduled Game
+      pollInterval: 30000,
+      pollTimer: null,
+      isFetching: false,
+      isAdvanced: false
+    };
+
+    const dom = {
+      loadingState: document.getElementById('loadingState'),
+      standingsContainer: document.getElementById('standingsContainer'),
+      eastTableBody: document.getElementById('eastTableBody'),
+      westTableBody: document.getElementById('westTableBody'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      refreshIcon: document.getElementById('refreshIcon'),
+      lastUpdatedLabel: document.getElementById('lastUpdatedLabel'),
+      toggleViewBtn: document.getElementById('toggleViewBtn'),
+      toggleViewText: document.getElementById('toggleViewText')
+    };
+
+    // --- PWA Initialization ---
+    function initPWA() {
+      const manifest = {
+        name: "League Command Center",
+        short_name: "Standings",
+        start_url: ".",
+        display: "standalone",
+        background_color: "#0f172a",
+        theme_color: "#1e293b",
+        icons: [{ src: "https://placehold.co/192x192/1e293b/ffffff?text=LCC", sizes: "192x192", type: "image/png" }]
+      };
+      const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+      document.getElementById('pwaManifest').href = URL.createObjectURL(manifestBlob);
+
+      const swCode = `
+        self.addEventListener('install', e => self.skipWaiting());
+        self.addEventListener('activate', e => self.clients.claim());
+        self.addEventListener('fetch', e => {
+            if (e.request.url.includes('api.espn.com')) return; // Never cache live APIs
+        }); 
+      `;
+      const swBlob = new Blob([swCode], { type: 'application/javascript' });
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(console.error);
+      }
+    }
+
+    // --- Initialization ---
+    async function init() {
+      lucide.createIcons();
+      initPWA();
+      setupEventListeners();
+      
+      // Initial robust data load
+      await bootSequence();
+      
+      // Start Live Score Polling
+      STATE.pollTimer = setInterval(fetchLiveScoreboard, STATE.pollInterval);
+    }
+
+    function setupEventListeners() {
+      dom.refreshBtn.addEventListener('click', () => {
+        if(!STATE.isFetching) {
+          fetchLiveScoreboard(true);
+        }
+      });
+      
+      dom.toggleViewBtn.addEventListener('click', () => {
+        STATE.isAdvanced = !STATE.isAdvanced;
+        if(STATE.isAdvanced) {
+          document.body.classList.remove('basic-view');
+          document.body.classList.add('advanced-view');
+          dom.toggleViewText.innerText = "SWITCH TO BASIC VIEW";
+        } else {
+          document.body.classList.remove('advanced-view');
+          document.body.classList.add('basic-view');
+          dom.toggleViewText.innerText = "SWITCH TO ADVANCED VIEW";
+        }
+      });
+
+      // Close Modal on clicking outside the content box
+      document.getElementById('rosterModal').addEventListener('click', (e) => {
+        if(e.target.id === 'rosterModal') {
+          closeRosterModal();
+        }
+      });
+    }
+
+    // Load Standings & Future Schedules first, then live scores
+    async function bootSequence() {
+      try {
+        await Promise.all([
+          fetchStandings(),
+          fetchLiveScoreboard() // Also gets current games
+        ]);
+        
+        // Render immediately with what we have
+        dom.loadingState.classList.add('hidden');
+        dom.standingsContainer.classList.remove('hidden');
+        dom.standingsContainer.classList.add('flex');
+        renderDashboard();
+        
+        // Fetch upcoming schedules for the next 10 days using a date range scoreboard query
+        fetchUpcomingSchedule();
+      } catch (err) {
+        console.error("Boot Sequence Error:", err);
+        dom.loadingState.innerHTML = `<div class="text-red-500 font-bold">Failed to load league data. Please refresh.</div>`;
+      }
+    }
+
+    // --- Data Fetchers ---
+    async function fetchStandings() {
+      const res = await fetch('https://site.api.espn.com/apis/v2/sports/basketball/nba/standings');
+      const data = await res.json();
+      
+      STATE.eastTeams = [];
+      STATE.westTeams = [];
+
+      const getStat = (stats, keys) => {
+        const keyArray = Array.isArray(keys) ? keys : [keys];
+        for (const k of keyArray) {
+          const s = stats.find(x => x.name === k || x.abbreviation === k || x.shortDisplayName === k);
+          if (s && (s.displayValue !== undefined || s.value !== undefined)) {
+            return s.displayValue !== undefined ? s.displayValue : s.value;
+          }
+        }
+        return null;
+      };
+
+      data.children.forEach(conf => {
+        const isEast = conf.name.toLowerCase().includes('eastern');
+        const isWest = conf.name.toLowerCase().includes('western');
+        
+        if (conf.standings && conf.standings.entries) {
+          conf.standings.entries.forEach(entry => {
+            const team = entry.team;
+            const stats = entry.stats;
+            
+            const teamObj = {
+              id: team.id,
+              name: team.name || team.shortDisplayName,
+              location: team.location || "",
+              abbrev: team.abbreviation,
+              logo: team.logos?.[0]?.href || '',
+              wins: getStat(stats, 'wins') ?? '-',
+              losses: getStat(stats, 'losses') ?? '-',
+              winPct: getStat(stats, 'winPercent') ?? '-',
+              rank: stats.find(s => s.name === 'playoffSeed')?.value || 99,
+              gb: getStat(stats, 'gamesBehind') ?? '-',
+              strk: getStat(stats, 'streak') ?? '-',
+              home: getStat(stats, ['vsHome', 'home', 'Home', 'HOME']) ?? '-',
+              away: getStat(stats, ['vsAway', 'vsRoad', 'away', 'road', 'Away', 'Road', 'AWAY', 'ROAD']) ?? '-',
+              conf: getStat(stats, ['vsConf', 'conference', 'inConference', 'Conf', 'CONF']) ?? '-',
+              ppg: getStat(stats, ['avgPointsFor', 'pointsForPerGame', 'PPG']) ?? '-',
+              opp: getStat(stats, ['avgPointsAgainst', 'pointsAgainstPerGame', 'OPP']) ?? '-',
+              diff: getStat(stats, ['pointDifferential', 'avgPointDifferential', 'differential', 'DIFF']) ?? '-'
+            };
+
+            if (isEast) STATE.eastTeams.push(teamObj);
+            if (isWest) STATE.westTeams.push(teamObj);
+          });
+        }
+      });
+
+      // Sort by playoff rank
+      STATE.eastTeams.sort((a, b) => a.rank - b.rank);
+      STATE.westTeams.sort((a, b) => a.rank - b.rank);
+    }
+
+    async function fetchLiveScoreboard(forceRender = false) {
+      if (STATE.isFetching) return;
+      STATE.isFetching = true;
+      dom.refreshIcon.classList.add('animate-spin');
+
+      try {
+        const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard");
+        const data = await res.json();
+        
+        STATE.liveGames = {}; // Reset
+
+        (data.events || []).forEach(ev => {
+          const comp = ev.competitions[0];
+          const away = comp.competitors.find(c => c.homeAway === 'away');
+          const home = comp.competitors.find(c => c.homeAway === 'home');
+          const status = ev.status.type;
+          
+          const isLive = status.state === 'in';
+          const isPregame = status.state === 'pre';
+          const isPost = status.state === 'post';
+
+          const gameData = {
+            id: ev.id,
+            isLive, isPregame, isPost,
+            date: ev.date,
+            period: ev.status.period,
+            clock: ev.status.displayClock,
+            shortDetail: status.shortDetail,
+            away: { id: away.id, tricode: away.team.abbreviation, score: away.score },
+            home: { id: home.id, tricode: home.team.abbreviation, score: home.score }
+          };
+
+          STATE.liveGames[away.id] = gameData;
+          STATE.liveGames[home.id] = gameData;
+        });
+
+        const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        dom.lastUpdatedLabel.innerText = `Updated: ${timeString}`;
+        
+        // Re-render UI with new score data
+        if (!dom.loadingState.classList.contains('hidden') || forceRender) {
+            renderDashboard();
+        }
+
+      } catch (err) {
+        console.error("Scoreboard Fetch Error:", err);
+      } finally {
+        STATE.isFetching = false;
+        setTimeout(() => dom.refreshIcon.classList.remove('animate-spin'), 500);
+      }
+    }
+
+    async function fetchUpcomingSchedule() {
+      try {
+        const d = new Date();
+        const start = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+        d.setDate(d.getDate() + 7);
+        const end = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+        
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${start}-${end}`);
+        const data = await res.json();
+        
+        STATE.nextEvents = {}; // Reset
+
+        if (data.events) {
+          // Sort chronologically
+          const sortedEvents = data.events.sort((a, b) => new Date(a.date) - new Date(b.date));
+          
+          sortedEvents.forEach(ev => {
+            const comp = ev.competitions[0];
+            const awayId = comp.competitors.find(c => c.homeAway === 'away').id;
+            const homeId = comp.competitors.find(c => c.homeAway === 'home').id;
+            
+            // Only assign if it's not a game already handled as "today's live game"
+            if (STATE.liveGames[awayId] && STATE.liveGames[awayId].id === ev.id) return;
+            
+            if (!STATE.nextEvents[awayId]) STATE.nextEvents[awayId] = ev;
+            if (!STATE.nextEvents[homeId]) STATE.nextEvents[homeId] = ev;
+          });
+        }
+        renderDashboard();
+      } catch (err) {
+        console.error("Upcoming schedule fetch error:", err);
+      }
+    }
+
+    // --- Modal Roster Logic ---
+    window.openRosterModal = async function(teamId, teamName, teamLogo) {
+      const modal = document.getElementById('rosterModal');
+      const content = document.getElementById('modalContentArea');
+      
+      document.getElementById('modalTeamName').innerText = teamName;
+      document.getElementById('modalTeamLogo').src = teamLogo;
+      
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      
+      // Loading State
+      content.innerHTML = `
+        <div class="flex flex-col items-center justify-center p-12 text-gray-500 gap-3">
+          <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-blue-500"></i>
+          <span class="font-mono text-xs uppercase tracking-widest">Fetching Roster...</span>
+        </div>
+      `;
+      lucide.createIcons();
+
+      try {
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${teamId}/roster`);
+        const data = await res.json();
+        
+        let athletes = [];
+        if (data.athletes && Array.isArray(data.athletes)) {
+          // Sometimes wrapped in category arrays (e.g. offensive/defensive)
+          data.athletes.forEach(group => {
+            if (group.items) athletes.push(...group.items);
+          });
+        }
+
+        if (athletes.length === 0) {
+          content.innerHTML = `<div class="p-8 text-center text-gray-400 font-mono text-sm">No roster data available right now.</div>`;
+          return;
+        }
+
+        // Sort by Jersey Number numerically
+        athletes.sort((a, b) => {
+          const numA = parseInt(a.jersey) || 999; // Default unassigned to bottom
+          const numB = parseInt(b.jersey) || 999;
+          return numA - numB;
+        });
+
+        const rowsHtml = athletes.map(p => `
+          <tr class="border-b border-court-border/40 hover:bg-white/5 transition-colors">
+            <td class="py-2.5 px-4 font-mono font-bold text-gray-400 w-12">${p.jersey || '-'}</td>
+            <td class="py-2.5 px-4 font-bold text-white whitespace-nowrap">${p.displayName || p.fullName}</td>
+            <td class="py-2.5 px-4 text-center text-gray-400 font-mono text-xs">${p.position?.abbreviation || '-'}</td>
+            <td class="py-2.5 px-4 text-center text-gray-400 font-mono text-xs whitespace-nowrap">${p.displayHeight || '-'}</td>
+            <td class="py-2.5 px-4 text-center text-gray-400 font-mono text-xs whitespace-nowrap">${p.displayWeight || '-'}</td>
+            <td class="py-2.5 px-4 text-center text-gray-400 font-mono text-xs">${p.age || '-'}</td>
+            <td class="py-2.5 px-4 text-center text-gray-400 font-mono text-xs">${p.experience?.years || 'R'}</td>
+          </tr>
+        `).join('');
+
+        content.innerHTML = `
+          <table class="w-full text-left border-collapse min-w-[500px]">
+            <thead class="sticky top-0 bg-[#11151E] shadow-md z-10">
+              <tr class="text-[10px] font-mono text-gray-500 uppercase tracking-widest border-b border-court-border">
+                <th class="py-2 px-4 font-bold w-12">#</th>
+                <th class="py-2 px-4 font-bold">Player Name</th>
+                <th class="py-2 px-4 font-bold text-center">Pos</th>
+                <th class="py-2 px-4 font-bold text-center">Height</th>
+                <th class="py-2 px-4 font-bold text-center">Weight</th>
+                <th class="py-2 px-4 font-bold text-center">Age</th>
+                <th class="py-2 px-4 font-bold text-center">Exp</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        `;
+      } catch (err) {
+        console.error("Error fetching roster:", err);
+        content.innerHTML = `<div class="p-8 text-center text-red-400 font-mono text-sm">Failed to load roster data. Please try again.</div>`;
+      }
+    };
+
+    window.closeRosterModal = function() {
+      const modal = document.getElementById('rosterModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    };
+
+    // --- UI Rendering ---
+    function renderDashboard() {
+      if (!dom.eastTableBody || !dom.westTableBody) return;
+      dom.eastTableBody.innerHTML = STATE.eastTeams.map(t => createTeamRowHtml(t)).join('');
+      dom.westTableBody.innerHTML = STATE.westTeams.map(t => createTeamRowHtml(t)).join('');
+      lucide.createIcons();
+    }
+
+    function createTeamRowHtml(team) {
+      const liveGame = STATE.liveGames[team.id];
+      const nextEvent = STATE.nextEvents[team.id];
+      
+      let statusHtml = '';
+      let rowClass = 'hover:bg-white/5 transition-colors border-b border-court-border/50 group';
+      
+      if (liveGame && liveGame.isLive) {
+        rowClass = 'bg-[#15231c] hover:bg-[#1a2d24] transition-colors border-b border-emerald-900/30 group';
+        const opp = liveGame.home.id === team.id ? liveGame.away.tricode : liveGame.home.tricode;
+        statusHtml = `
+          <div class="text-emerald-400 font-mono text-[11px] font-bold flex items-center justify-end gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+            LIVE: Q${liveGame.period > 4 ? 'OT' : liveGame.period} ${liveGame.clock} ${liveGame.home.id === team.id ? 'vs' : '@'} ${opp}
+          </div>
+        `;
+      } else if (liveGame && liveGame.isPregame) {
+        const time = new Date(liveGame.date).toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'});
+        const isHome = liveGame.home.id === team.id;
+        const opp = isHome ? liveGame.away.tricode : liveGame.home.tricode;
+        statusHtml = `<div class="text-court-gold font-mono text-[11px] font-bold text-right">Today @ ${time} ${isHome ? 'vs' : '@'} ${opp}</div>`;
+      } else if (liveGame && liveGame.isPost) {
+        const isHome = liveGame.home.id === team.id;
+        const opp = isHome ? liveGame.away.tricode : liveGame.home.tricode;
+        statusHtml = `<div class="text-gray-500 font-mono text-[11px] font-bold text-right">Final ${isHome ? 'vs' : '@'} ${opp} (${liveGame.home.score}-${liveGame.away.score})</div>`;
+      } else if (nextEvent) {
+        const dateObj = new Date(nextEvent.date);
+        const dateStr = dateObj.toLocaleDateString([], {month: 'short', day: 'numeric'});
+        const timeStr = dateObj.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'});
+        const myComp = nextEvent.competitions[0].competitors.find(c => c.id === team.id);
+        const oppComp = nextEvent.competitions[0].competitors.find(c => c.id !== team.id);
+        const isHome = myComp?.homeAway === 'home';
+        const oppName = oppComp ? oppComp.team.abbreviation : 'TBD';
+        statusHtml = `<div class="text-gray-400 font-mono text-[11px] text-right group-hover:text-gray-300 transition-colors">${dateStr} ${isHome ? 'vs' : '@'} ${oppName}, ${timeStr}</div>`;
+      } else {
+        statusHtml = `<div class="text-gray-600 font-mono text-[11px] text-right">TBD</div>`;
+      }
+
+      let rankColor = 'text-gray-500';
+      if (team.rank <= 6) rankColor = 'text-blue-400 font-black drop-shadow-[0_0_8px_rgba(59,130,246,0.3)]';
+      else if (team.rank <= 10) rankColor = 'text-amber-400 font-bold';
+      
+      const escapedTeamName = team.name.replace(/'/g, "\\'");
+
+      return `
+        <tr class="${rowClass}">
+          <td class="py-2.5 text-center text-xs ${rankColor}">${team.rank}</td>
+          <td class="py-2.5 pr-2">
+            <!-- Clickable Area for Roster -->
+            <div class="flex items-center gap-2.5 cursor-pointer group/team p-1 -ml-1 rounded-lg hover:bg-white/10 transition" onclick="openRosterModal('${team.id}', '${escapedTeamName}', '${team.logo}')" title="View ${team.name} Roster">
+              <div class="w-6 h-6 flex items-center justify-center shrink-0">
+                <img src="${team.logo}" alt="${team.name}" class="max-w-full max-h-full object-contain group-hover/team:scale-110 transition-transform" onerror="this.style.display='none'">
+              </div>
+              <div class="flex flex-col justify-center">
+                <span class="text-[9px] font-mono text-gray-500 uppercase tracking-widest leading-tight">${team.location}</span>
+                <span class="text-white font-bold text-sm tracking-wide whitespace-nowrap leading-tight group-hover/team:text-blue-400 transition-colors">${team.name}</span>
+              </div>
+            </div>
+          </td>
+          <td class="py-2.5 text-center text-gray-300 font-mono text-xs">${team.wins}-${team.losses}</td>
+          <td class="py-2.5 text-center text-gray-400 font-mono text-xs">${team.gb === '0.0' || team.gb === '0' ? '-' : team.gb}</td>
+          <td class="py-2.5 text-center text-gray-400 font-mono text-xs">${team.strk}</td>
+          <td class="py-2.5 text-center text-gray-500 font-mono text-xs adv-col">${team.winPct}</td>
+          <td class="py-2.5 text-center text-gray-500 font-mono text-xs adv-col">${team.home}</td>
+          <td class="py-2.5 text-center text-gray-500 font-mono text-xs adv-col">${team.away}</td>
+          <td class="py-2.5 text-center text-gray-500 font-mono text-xs adv-col">${team.conf}</td>
+          <td class="py-2.5 text-center text-gray-500 font-mono text-xs adv-col">${team.ppg}</td>
+          <td class="py-2.5 text-center text-gray-500 font-mono text-xs adv-col">${team.opp}</td>
+          <td class="py-2.5 text-center text-gray-500 font-mono text-xs adv-col">${team.diff}</td>
+          <td class="py-2.5 pr-2">${statusHtml}</td>
+        </tr>
+      `;
+    }
+
+    // Boot App
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
