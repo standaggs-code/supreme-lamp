@@ -641,6 +641,11 @@
           table.classList.add('hidden');
       }
     }
+    window.closeRosterModal = function() {
+      const modal = document.getElementById('rosterModal');
+      modal.classList.add('hidden');
+    };
+    
   // --- UI Rendering ---
     function renderDashboard() {
       if (!dom.eastTableBody || !dom.westTableBody) return;
