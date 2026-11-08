@@ -216,7 +216,7 @@
           </div>
           <div>
             <h3 id="rosterTeamName" class="text-lg font-black text-white leading-none">Team Roster</h3>
-            <span class="text-[11px] font-mono text-gray-400 uppercase tracking-widest mt-1 block">Active Players</span>
+            <span class="text-[11px] font-mono text-gray-400 uppercase tracking-widest mt-1 block">Active Players & Stats</span>
           </div>
         </div>
         <button onclick="closeRosterModal()" class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition">
@@ -228,20 +228,7 @@
       <div id="modalContentArea" class="flex-grow overflow-y-auto custom-scrollbar bg-court-dark">
         <div id="rosterNoData" class="p-8 text-center text-gray-500 font-mono hidden">No roster data available right now.</div>
         <table id="rosterTable" class="w-full text-left border-collapse hidden">
-          <thead class="bg-[#151a23] sticky top-0 z-10">
-            <tr class="text-[10px] uppercase tracking-widest text-gray-500 border-b border-court-border">
-              <th class="p-3 font-bold text-center w-12">#</th>
-              <th class="p-3 font-bold">Player</th>
-              <th class="p-3 font-bold text-center w-16">Pos</th>
-              <th class="p-3 font-bold text-center hidden sm:table-cell w-16">Age</th>
-              <th class="p-3 font-bold text-center hidden sm:table-cell w-20">Ht</th>
-              <th class="p-3 font-bold text-center hidden sm:table-cell w-20">Wt</th>
-              <th class="p-3 font-bold text-center w-16">Exp</th>
-            </tr>
-          </thead>
-          <tbody id="rosterTableBody">
-            <!-- Injected via JS -->
-          </tbody>
+          <!-- Thead is now injected via JS to dynamically switch headers -->
         </table>
       </div>
       
@@ -258,7 +245,8 @@
       pollInterval: 30000,
       pollTimer: null,
       isFetching: false,
-      isAdvanced: false
+      isAdvanced: false,
+      rosterCache: {} // teamId -> { timestamp, players: [] }
     };
 
     const dom = {
@@ -481,86 +469,154 @@
       }
     }
     
-    // --- Modal Roster Logic ---
- async function openRosterModal(teamId, teamName, logoUrl) {
-    const modal = document.getElementById('rosterModal');
-    const title = document.getElementById('rosterTeamName');
-    const logo = document.getElementById('rosterTeamLogo');
-    const tbody = document.getElementById('rosterTableBody');
-    const noData = document.getElementById('rosterNoData');
-    const table = document.getElementById('rosterTable');
+    // --- Modal Roster Logic with Play Stats ---
+    async function openRosterModal(teamId, teamName, logoUrl) {
+      const modal = document.getElementById('rosterModal');
+      const title = document.getElementById('rosterTeamName');
+      const logo = document.getElementById('rosterTeamLogo');
+      const noData = document.getElementById('rosterNoData');
+      const table = document.getElementById('rosterTable');
 
-    // Reset modal state
-    title.textContent = teamName;
-    logo.src = logoUrl;
-    tbody.innerHTML = '';
-    noData.classList.add('hidden');
-    table.classList.add('hidden');
-    modal.classList.remove('hidden');
+      // Reset modal state
+      title.textContent = teamName;
+      logo.src = logoUrl;
+      noData.classList.add('hidden');
+      table.classList.add('hidden');
+      modal.classList.remove('hidden');
 
-    try {
-        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${teamId}/roster`);
-        const data = await res.json();
+      // Set up the table structure for Play Stats
+      table.innerHTML = `
+          <thead class="bg-[#151a23] sticky top-0 z-10">
+              <tr class="text-[10px] uppercase tracking-widest text-gray-500 border-b border-court-border">
+                  <th class="p-3 font-bold text-center w-12">#</th>
+                  <th class="p-3 font-bold">Player</th>
+                  <th class="p-3 font-bold text-center w-16">Pos</th>
+                  <th class="p-3 font-bold text-center w-16">MIN</th>
+                  <th class="p-3 font-bold text-center hidden sm:table-cell w-16">FG%</th>
+                  <th class="p-3 font-bold text-center hidden sm:table-cell w-16">3P%</th>
+                  <th class="p-3 font-bold text-center w-16">REB</th>
+                  <th class="p-3 font-bold text-center w-16">AST</th>
+                  <th class="p-3 font-bold text-center w-16 text-emerald-400">PTS</th>
+              </tr>
+          </thead>
+          <tbody id="rosterTableBody"></tbody>
+      `;
+      const tbody = document.getElementById('rosterTableBody');
 
-        // ---------------------------------------------------------
-        // NEW BULLETPROOF ROSTER EXTRACTION
-        // Safely extract players whether ESPN groups them by position or sends a flat array
-        let players = [];
-        if (data.athletes) {
-            if (data.athletes.length > 0 && data.athletes[0].items) {
-                // Handle grouped layout (e.g., Guards, Forwards, Centers)
-                data.athletes.forEach(group => {
-                    if (group.items) players.push(...group.items);
-                });
-            } else {
-                // Handle flat array layout
-                players = data.athletes;
-            }
-        }
-        // ---------------------------------------------------------
+      try {
+          let players = [];
+          
+          // 1. Check Cache (Cache expires after 1 hour)
+          const cached = STATE.rosterCache[teamId];
+          if (cached && (Date.now() - cached.timestamp < 3600000)) {
+              players = cached.players;
+          } else {
+              // Show Loading State inside Modal Table
+              table.classList.remove('hidden');
+              tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-blue-400 font-mono animate-pulse"><i data-lucide="loader-2" class="w-6 h-6 animate-spin inline mr-2"></i> Fetching individual player stats...</td></tr>';
+              lucide.createIcons();
 
-        if (players.length === 0) {
-            noData.classList.remove('hidden');
-            noData.textContent = 'No roster data available right now.';
-            return;
-        }
+              // 2. Fetch Base Roster
+              const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${teamId}/roster`);
+              const data = await res.json();
 
-        // Sort players numerically by jersey number
-        players.sort((a, b) => {
-            const aNum = parseInt(a.jersey) || 999;
-            const bNum = parseInt(b.jersey) || 999;
-            return aNum - bNum;
-        });
+              let basePlayers = [];
+              if (data.athletes) {
+                  if (data.athletes.length > 0 && data.athletes[0].items) {
+                      data.athletes.forEach(group => {
+                          if (group.items) basePlayers.push(...group.items);
+                      });
+                  } else {
+                      basePlayers = data.athletes;
+                  }
+              }
 
-        players.forEach(player => {
-            const tr = document.createElement('tr');
-            tr.className = 'border-b border-court-border/50 hover:bg-white/5 transition-colors text-sm';
-            
-            const age = player.age || '-';
-            const height = player.displayHeight || '-';
-            const weight = player.displayWeight || '-';
-            const exp = player.experience?.years === 0 ? 'R' : (player.experience?.years || '-');
-            const pos = player.position?.abbreviation || '-';
-            
-            tr.innerHTML = `
-                <td class="p-3 text-gray-400 text-center font-mono">${player.jersey || '-'}</td>
-                <td class="p-3 font-bold text-gray-200">${player.fullName}</td>
-                <td class="p-3 text-center text-gray-400">${pos}</td>
-                <td class="p-3 text-center hidden sm:table-cell text-gray-400 font-mono">${age}</td>
-                <td class="p-3 text-center hidden sm:table-cell text-gray-400 font-mono">${height}</td>
-                <td class="p-3 text-center hidden sm:table-cell text-gray-400 font-mono">${weight}</td>
-                <td class="p-3 text-center text-gray-400 font-mono">${exp}</td>
-            `;
-            tbody.appendChild(tr);
-        });
+              if (basePlayers.length === 0) {
+                  table.classList.add('hidden');
+                  noData.classList.remove('hidden');
+                  noData.textContent = 'No roster data available right now.';
+                  return;
+              }
 
-        table.classList.remove('hidden');
-    } catch (error) {
-        console.error('Roster fetch error:', error);
-        noData.classList.remove('hidden');
-        noData.textContent = 'Failed to load roster data.';
+              // 3. Parallel Fetch Detailed Play Stats
+              const statPromises = basePlayers.map(async (player) => {
+                  let stats = { min: '-', fgPct: '-', fg3Pct: '-', reb: '-', ast: '-', pts: '-' };
+                  try {
+                      const statRes = await fetch(`https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${player.id}`);
+                      if (statRes.ok) {
+                          const statData = await statRes.json();
+                          const statArray = statData.athlete?.stats?.summary?.statistics || [];
+                          
+                          // Helper to find stat safely across varied keys
+                          const getStat = (names, abbrevs) => {
+                              const s = statArray.find(x => names.includes(x.name) || abbrevs.includes(x.abbreviation));
+                              return s ? s.displayValue : '-';
+                          };
+
+                          if (statArray.length > 0) {
+                              stats = {
+                                  min: getStat(['avgMinutes', 'minutes'], ['MIN']),
+                                  fgPct: getStat(['fieldGoalPct'], ['FG%']),
+                                  fg3Pct: getStat(['threePointFieldGoalPct'], ['3P%']),
+                                  reb: getStat(['avgRebounds', 'rebounds'], ['REB']),
+                                  ast: getStat(['avgAssists', 'assists'], ['AST']),
+                                  pts: getStat(['avgPoints', 'points'], ['PTS'])
+                              };
+                          }
+                      }
+                  } catch (e) {
+                      console.warn(`Could not fetch stats for ${player.fullName}`, e);
+                  }
+                  
+                  return { ...player, playStats: stats };
+              });
+
+              // Wait for all 15 individual requests to complete
+              players = await Promise.all(statPromises);
+              
+              // 4. Cache the results
+              STATE.rosterCache[teamId] = { timestamp: Date.now(), players: players };
+              tbody.innerHTML = ''; // Clear loading spinner
+          }
+
+          // Sort players numerically by jersey number
+          players.sort((a, b) => {
+              const aNum = parseInt(a.jersey) || 999;
+              const bNum = parseInt(b.jersey) || 999;
+              return aNum - bNum;
+          });
+
+          // 5. Render Players with Play Stats
+          players.forEach(player => {
+              const tr = document.createElement('tr');
+              tr.className = 'border-b border-court-border/50 hover:bg-white/5 transition-colors text-sm';
+              
+              const pos = player.position?.abbreviation || '-';
+              const st = player.playStats;
+              
+              tr.innerHTML = `
+                  <td class="p-3 text-gray-400 text-center font-mono">${player.jersey || '-'}</td>
+                  <td class="p-3 font-bold text-gray-200">${player.fullName}</td>
+                  <td class="p-3 text-center text-gray-400">${pos}</td>
+                  <td class="p-3 text-center text-gray-300 font-mono">${st.min}</td>
+                  <td class="p-3 text-center hidden sm:table-cell text-gray-300 font-mono">${st.fgPct}</td>
+                  <td class="p-3 text-center hidden sm:table-cell text-gray-300 font-mono">${st.fg3Pct}</td>
+                  <td class="p-3 text-center text-blue-400 font-mono font-bold">${st.reb}</td>
+                  <td class="p-3 text-center text-blue-400 font-mono font-bold">${st.ast}</td>
+                  <td class="p-3 text-center text-emerald-400 font-mono font-black">${st.pts}</td>
+              `;
+              tbody.appendChild(tr);
+          });
+
+          table.classList.remove('hidden');
+      } catch (error) {
+          console.error('Roster fetch error:', error);
+          noData.classList.remove('hidden');
+          noData.textContent = 'Failed to load roster data.';
+          table.classList.add('hidden');
+      }
     }
-}
+    
     window.closeRosterModal = function() {
       const modal = document.getElementById('rosterModal');
       modal.classList.add('hidden');
@@ -616,11 +672,11 @@
       if (team.rank <= 6) rankColor = 'text-blue-400 font-black drop-shadow-[0_0_8px_rgba(59,130,246,0.3)]';
       else if (team.rank <= 10) rankColor = 'text-amber-400 font-bold';
       
-      const escapedTeamName = team.name.replace(/'/g, "\'");
+      const escapedTeamName = team.name.replace(/'/g, "'");
 
       return `
         <tr class="${rowClass}">
-          <td class="py-2.5 text-center text-xs ${rankColor}">${team.rank}</td>
+          <td class="py-2.5 text-center text-xs ${rank,Color}">${team.rank}</td>
           <td class="py-2.5 pr-2">
             <!-- Clickable Area for Roster -->
             <div class="flex items-center gap-2.5 cursor-pointer group/team p-1 -ml-1 rounded-lg hover:bg-white/10 transition" onclick="openRosterModal('${team.id}', '${escapedTeamName}', '${team.logo}')" title="View ${team.name} Roster">
