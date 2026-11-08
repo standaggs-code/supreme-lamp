@@ -538,59 +538,46 @@
                   return;
               }
 
-             // 3. Parallel Fetch Detailed Play Stats
-const statPromises = basePlayers.map(async (player) => {
-    let stats = { min: '-', fgPct: '-', fg3Pct: '-', reb: '-', ast: '-', pts: '-' };
-    try {
-        // Appending /overview ensures the statistical payload is included
-        const statRes = await fetch(`https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${player.id}/overview`);
-        
-        if (statRes.ok) {
-            const statData = await statRes.json();
-            
-            // Deep search: Crawl the JSON tree to find the stats array wherever ESPN nested it
-            let allStats = [];
-            function traverse(obj) {
-                if (!obj || typeof obj !== 'object') return;
-                
-                if (Array.isArray(obj)) {
-                    // Identify an ESPN stat array by checking for displayValue and a name
-                    if (obj.length > 0 && obj[0].displayValue !== undefined && (obj[0].name || obj[0].abbreviation)) {
-                        allStats.push(...obj);
-                    } else {
-                        obj.forEach(traverse);
-                    }
-                } else {
-                    Object.values(obj).forEach(traverse);
-                }
-            }
-            
-            traverse(statData);
+// 3. Parallel Fetch Detailed Play Stats
+              const statPromises = basePlayers.map(async (player) => {
+                  let stats = { min: '-', fgPct: '-', fg3Pct: '-', reb: '-', ast: '-', pts: '-' };
+                  try {
+                      const statRes = await fetch(`https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${player.id}/overview`);
+                      
+                      if (statRes.ok) {
+                          const statData = await statRes.json();
+                          
+                          // Hard-target the season averages, ignoring the recent game logs
+                          let statArray = [];
+                          if (statData.athlete?.stats?.summary?.statistics) {
+                              statArray = statData.athlete.stats.summary.statistics;
+                          } else if (statData.athlete?.statSummary?.statistics) {
+                              statArray = statData.athlete.statSummary.statistics;
+                          }
 
-            if (allStats.length > 0) {
-                // Safely extract the stats using multiple possible ESPN naming conventions
-                const getStat = (names, abbrevs) => {
-                    const s = allStats.find(x => names.includes(x.name) || abbrevs.includes(x.abbreviation));
-                    return s ? s.displayValue : '-';
-                };
-                
-                stats = {
-                    min: getStat(['avgMinutes', 'minutes'], ['MIN']),
-                    fgPct: getStat(['fieldGoalPct'], ['FG%']),
-                    fg3Pct: getStat(['threePointFieldGoalPct'], ['3P%']),
-                    reb: getStat(['avgRebounds', 'rebounds'], ['REB']),
-                    ast: getStat(['avgAssists', 'assists'], ['AST']),
-                    pts: getStat(['avgPoints', 'points'], ['PTS'])
-                };
-            }
-        }
-    } catch (e) {
-        console.warn(`Could not fetch stats for ${player.fullName}`, e);
-    }
-    
-    return { ...player, playStats: stats };
-});
-              // Wait for all 15 individual requests to complete
+                          if (statArray.length > 0) {
+                              // Expand the search terms to catch all of ESPN's naming variations
+                              const getStat = (names, abbrevs) => {
+                                  const s = statArray.find(x => names.includes(x.name) || abbrevs.includes(x.abbreviation));
+                                  return s && s.displayValue !== undefined ? s.displayValue : '-';
+                              };
+                              
+                              stats = {
+                                  min: getStat(['avgMinutes', 'minutes', 'min'], ['MIN']),
+                                  fgPct: getStat(['fieldGoalPct', 'fgPercent', 'fgPct'], ['FG%']),
+                                  fg3Pct: getStat(['threePointFieldGoalPct', 'fg3Percent', 'fg3Pct'], ['3P%']),
+                                  reb: getStat(['avgRebounds', 'rebounds', 'reb'], ['REB']),
+                                  ast: getStat(['avgAssists', 'assists', 'ast'], ['AST']),
+                                  pts: getStat(['avgPoints', 'points', 'pts'], ['PTS'])
+                              };
+                          }
+                      }
+                  } catch (e) {
+                      console.warn(`Could not fetch stats for ${player.fullName}`, e);
+                  }
+                  
+                  return { ...player, playStats: stats };
+              });              // Wait for all 15 individual requests to complete
               players = await Promise.all(statPromises);
               
               // 4. Cache the results
