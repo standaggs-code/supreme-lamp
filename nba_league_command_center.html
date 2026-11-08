@@ -430,7 +430,9 @@
       }
     }
 
-    async function fetchUpcomingSchedule() {
+async function fetchUpcomingSchedule() {
+    const scheduleMap = {}; // Initialize the object
+    
     try {
         // Fetch the next 5 days individually to bypass ESPN's strict date-range limits
         const fetchPromises = [];
@@ -484,6 +486,8 @@
     } catch (error) {
         console.error('Upcoming schedule fetch error:', error);
     }
+    
+    return scheduleMap; // Return the populated object
 }
     
     // --- Modal Roster Logic ---
