@@ -1,5 +1,5 @@
 const CACHE_NAME = 'nba-dashboards-v1';
-const ASSETS = ['/', '/index.html', '/nba_league_command_center.html'];
+const ASSETS = ['/index.html', '/nba_league_command_center.html'];
 
 self.addEventListener('install', (e) => {
     e.waitUntil(
