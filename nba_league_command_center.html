@@ -469,7 +469,7 @@
       }
     }
     
-    // --- Modal Roster Logic with Play Stats ---
+// --- Modal Roster Logic with Play Stats ---
     async function openRosterModal(teamId, teamName, logoUrl) {
       const modal = document.getElementById('rosterModal');
       const title = document.getElementById('rosterTeamName');
@@ -538,7 +538,7 @@
                   return;
               }
 
-// 3. Parallel Fetch Detailed Play Stats
+              // 3. Parallel Fetch Detailed Play Stats
               const statPromises = basePlayers.map(async (player) => {
                   let stats = { min: '-', fgPct: '-', fg3Pct: '-', reb: '-', ast: '-', pts: '-' };
                   try {
@@ -564,12 +564,11 @@
                           }
                           traverse(statData);
 
-                          // Hunt specifically for the Season Averages array (it will have 'avgPoints' or 'fieldGoalPct')
+                          // Hunt specifically for the Season Averages array
                           let targetStats = allStatArrays.find(arr => 
                               arr.some(s => s.name === 'fieldGoalPct' || s.name === 'avgPoints' || s.name === 'avgMinutes')
                           );
 
-                          // Fallback to the first available array if season averages aren't found
                           if (!targetStats && allStatArrays.length > 0) {
                               targetStats = allStatArrays[0];
                           }
@@ -596,7 +595,53 @@
                   
                   return { ...player, playStats: stats };
               });
-    // --- UI Rendering ---
+
+              // Wait for all requests to complete
+              players = await Promise.all(statPromises);
+              
+              // 4. Cache the results
+              STATE.rosterCache[teamId] = { timestamp: Date.now(), players: players };
+              tbody.innerHTML = ''; // Clear loading spinner
+          }
+
+          // Sort players numerically by jersey number
+          players.sort((a, b) => {
+              const aNum = parseInt(a.jersey) || 999;
+              const bNum = parseInt(b.jersey) || 999;
+              return aNum - bNum;
+          });
+
+          // 5. Render Players with Play Stats
+          players.forEach(player => {
+              const tr = document.createElement('tr');
+              tr.className = 'border-b border-court-border/50 hover:bg-white/5 transition-colors text-sm';
+              
+              const pos = player.position?.abbreviation || '-';
+              const st = player.playStats;
+              
+              tr.innerHTML = `
+                  <td class="p-3 text-gray-400 text-center font-mono">${player.jersey || '-'}</td>
+                  <td class="p-3 font-bold text-gray-200">${player.fullName}</td>
+                  <td class="p-3 text-center text-gray-400">${pos}</td>
+                  <td class="p-3 text-center text-gray-300 font-mono">${st.min}</td>
+                  <td class="p-3 text-center hidden sm:table-cell text-gray-300 font-mono">${st.fgPct}</td>
+                  <td class="p-3 text-center hidden sm:table-cell text-gray-300 font-mono">${st.fg3Pct}</td>
+                  <td class="p-3 text-center text-blue-400 font-mono font-bold">${st.reb}</td>
+                  <td class="p-3 text-center text-blue-400 font-mono font-bold">${st.ast}</td>
+                  <td class="p-3 text-center text-emerald-400 font-mono font-black">${st.pts}</td>
+              `;
+              tbody.appendChild(tr);
+          });
+
+          table.classList.remove('hidden');
+      } catch (error) {
+          console.error('Roster fetch error:', error);
+          noData.classList.remove('hidden');
+          noData.textContent = 'Failed to load roster data.';
+          table.classList.add('hidden');
+      }
+    }
+  // --- UI Rendering ---
     function renderDashboard() {
       if (!dom.eastTableBody || !dom.westTableBody) return;
       dom.eastTableBody.innerHTML = STATE.eastTeams.map(t => createTeamRowHtml(t)).join('');
