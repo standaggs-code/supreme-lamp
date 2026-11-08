@@ -9,6 +9,7 @@
   <link rel="manifest" href="standings-manifest.json">
   <meta name="theme-color" content="#0B0E14">
   <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" type="image/png" href="icon-192.png">
   
   <!-- Tailwind & Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -538,7 +539,7 @@
                   return;
               }
 
-              // 3. Parallel Fetch Detailed Play Stats
+// 3. Parallel Fetch Detailed Play Stats
               const statPromises = basePlayers.map(async (player) => {
                   let stats = { min: '-', fgPct: '-', fg3Pct: '-', reb: '-', ast: '-', pts: '-' };
                   try {
@@ -546,46 +547,53 @@
                       
                       if (statRes.ok) {
                           const statData = await statRes.json();
-                          
-                          let allStatArrays = [];
-                          
-                          // Deep crawler: Find EVERY stat array in the entire ESPN response
-                          function traverse(obj) {
-                              if (!obj || typeof obj !== 'object') return;
-                              if (Array.isArray(obj)) {
-                                  if (obj.length > 0 && obj[0].displayValue !== undefined && obj[0].name !== undefined) {
-                                      allStatArrays.push(obj);
+                          let statArray = [];
+
+                          // 1. Try standard ESPN season summary location
+                          if (statData.athlete?.stats?.summary?.statistics) {
+                              statArray = statData.athlete.stats.summary.statistics;
+                          } 
+                          // 2. Try ESPN's alternative splits location
+                          else if (statData.athlete?.stats?.splits?.categories?.[0]?.stats) {
+                              statArray = statData.athlete.stats.splits.categories.flatMap(c => c.stats);
+                          }
+
+                          // 3. Deep search fallback - STRICTLY looking for season averages
+                          if (!statArray || statArray.length === 0) {
+                              let allStatArrays = [];
+                              function traverse(obj) {
+                                  if (!obj || typeof obj !== 'object') return;
+                                  if (Array.isArray(obj)) {
+                                      if (obj.length > 0 && obj[0].displayValue !== undefined && obj[0].name !== undefined) {
+                                          allStatArrays.push(obj);
+                                      } else {
+                                          obj.forEach(traverse);
+                                      }
                                   } else {
-                                      obj.forEach(traverse);
+                                      Object.values(obj).forEach(traverse);
                                   }
-                              } else {
-                                  Object.values(obj).forEach(traverse);
                               }
-                          }
-                          traverse(statData);
-
-                          // Hunt specifically for the Season Averages array
-                          let targetStats = allStatArrays.find(arr => 
-                              arr.some(s => s.name === 'fieldGoalPct' || s.name === 'avgPoints' || s.name === 'avgMinutes')
-                          );
-
-                          if (!targetStats && allStatArrays.length > 0) {
-                              targetStats = allStatArrays[0];
+                              traverse(statData);
+                              
+                              // Must contain "avg" identifiers to prevent pulling single game logs
+                              statArray = allStatArrays.find(arr => 
+                                  arr.some(s => s.name === 'avgPoints' || s.name === 'avgMinutes')
+                              ) || [];
                           }
 
-                          if (targetStats) {
+                          if (statArray.length > 0) {
                               const getStat = (names, abbrevs) => {
-                                  const s = targetStats.find(x => names.includes(x.name) || abbrevs.includes(x.abbreviation));
+                                  const s = statArray.find(x => names.includes(x.name) || abbrevs.includes(x.abbreviation));
                                   return s && s.displayValue !== undefined ? s.displayValue : '-';
                               };
                               
                               stats = {
-                                  min: getStat(['avgMinutes', 'minutes', 'min'], ['MIN']),
-                                  fgPct: getStat(['fieldGoalPct', 'fgPercent', 'fgPct'], ['FG%']),
-                                  fg3Pct: getStat(['threePointFieldGoalPct', 'fg3Percent', 'fg3Pct'], ['3P%']),
-                                  reb: getStat(['avgRebounds', 'rebounds', 'reb'], ['REB']),
-                                  ast: getStat(['avgAssists', 'assists', 'ast'], ['AST']),
-                                  pts: getStat(['avgPoints', 'points', 'pts'], ['PTS'])
+                                  min: getStat(['avgMinutes', 'minutes'], ['MIN']),
+                                  fgPct: getStat(['fieldGoalPct', 'fgPercent'], ['FG%']),
+                                  fg3Pct: getStat(['threePointFieldGoalPct', 'fg3Percent'], ['3P%']),
+                                  reb: getStat(['avgRebounds', 'rebounds'], ['REB']),
+                                  ast: getStat(['avgAssists', 'assists'], ['AST']),
+                                  pts: getStat(['avgPoints', 'points'], ['PTS'])
                               };
                           }
                       }
@@ -595,7 +603,6 @@
                   
                   return { ...player, playStats: stats };
               });
-
               // Wait for all requests to complete
               players = await Promise.all(statPromises);
               
