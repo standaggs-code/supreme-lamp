@@ -482,71 +482,85 @@
     }
     
     // --- Modal Roster Logic ---
-    async function openRosterModal(teamId, teamName, logoUrl) {
-      const modal = document.getElementById('rosterModal');
-      const title = document.getElementById('rosterTeamName');
-      const logo = document.getElementById('rosterTeamLogo');
-      const tbody = document.getElementById('rosterTableBody');
-      const noData = document.getElementById('rosterNoData');
-      const table = document.getElementById('rosterTable');
+ async function openRosterModal(teamId, teamName, logoUrl) {
+    const modal = document.getElementById('rosterModal');
+    const title = document.getElementById('rosterTeamName');
+    const logo = document.getElementById('rosterTeamLogo');
+    const tbody = document.getElementById('rosterTableBody');
+    const noData = document.getElementById('rosterNoData');
+    const table = document.getElementById('rosterTable');
 
-      // Reset modal state
-      title.textContent = teamName;
-      logo.src = logoUrl;
-      tbody.innerHTML = '';
-      noData.classList.add('hidden');
-      table.classList.add('hidden');
-      modal.classList.remove('hidden');
+    // Reset modal state
+    title.textContent = teamName;
+    logo.src = logoUrl;
+    tbody.innerHTML = '';
+    noData.classList.add('hidden');
+    table.classList.add('hidden');
+    modal.classList.remove('hidden');
 
-      try {
-          const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${teamId}/roster`);
-          const data = await res.json();
+    try {
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${teamId}/roster`);
+        const data = await res.json();
 
-          const players = data.athletes?.[0]?.items || [];
+        // ---------------------------------------------------------
+        // NEW BULLETPROOF ROSTER EXTRACTION
+        // Safely extract players whether ESPN groups them by position or sends a flat array
+        let players = [];
+        if (data.athletes) {
+            if (data.athletes.length > 0 && data.athletes[0].items) {
+                // Handle grouped layout (e.g., Guards, Forwards, Centers)
+                data.athletes.forEach(group => {
+                    if (group.items) players.push(...group.items);
+                });
+            } else {
+                // Handle flat array layout
+                players = data.athletes;
+            }
+        }
+        // ---------------------------------------------------------
 
-          if (players.length === 0) {
-              noData.classList.remove('hidden');
-              noData.textContent = 'No roster data available right now.';
-              return;
-          }
+        if (players.length === 0) {
+            noData.classList.remove('hidden');
+            noData.textContent = 'No roster data available right now.';
+            return;
+        }
 
-          // Sort players numerically by jersey number
-          players.sort((a, b) => {
-              const aNum = parseInt(a.jersey) || 999;
-              const bNum = parseInt(b.jersey) || 999;
-              return aNum - bNum;
-          });
+        // Sort players numerically by jersey number
+        players.sort((a, b) => {
+            const aNum = parseInt(a.jersey) || 999;
+            const bNum = parseInt(b.jersey) || 999;
+            return aNum - bNum;
+        });
 
-          players.forEach(player => {
-              const tr = document.createElement('tr');
-              tr.className = 'border-b border-court-border/50 hover:bg-white/5 transition-colors text-sm';
-              
-              const age = player.age || '-';
-              const height = player.displayHeight || '-';
-              const weight = player.displayWeight || '-';
-              const exp = player.experience?.years === 0 ? 'R' : (player.experience?.years || '-');
-              const pos = player.position?.abbreviation || '-';
-              
-              tr.innerHTML = `
-                  <td class="p-3 text-gray-400 text-center font-mono">${player.jersey || '-'}</td>
-                  <td class="p-3 font-bold text-gray-200">${player.fullName}</td>
-                  <td class="p-3 text-center text-gray-400">${pos}</td>
-                  <td class="p-3 text-center hidden sm:table-cell text-gray-400 font-mono">${age}</td>
-                  <td class="p-3 text-center hidden sm:table-cell text-gray-400 font-mono">${height}</td>
-                  <td class="p-3 text-center hidden sm:table-cell text-gray-400 font-mono">${weight}</td>
-                  <td class="p-3 text-center text-gray-400 font-mono">${exp}</td>
-              `;
-              tbody.appendChild(tr);
-          });
+        players.forEach(player => {
+            const tr = document.createElement('tr');
+            tr.className = 'border-b border-court-border/50 hover:bg-white/5 transition-colors text-sm';
+            
+            const age = player.age || '-';
+            const height = player.displayHeight || '-';
+            const weight = player.displayWeight || '-';
+            const exp = player.experience?.years === 0 ? 'R' : (player.experience?.years || '-');
+            const pos = player.position?.abbreviation || '-';
+            
+            tr.innerHTML = `
+                <td class="p-3 text-gray-400 text-center font-mono">${player.jersey || '-'}</td>
+                <td class="p-3 font-bold text-gray-200">${player.fullName}</td>
+                <td class="p-3 text-center text-gray-400">${pos}</td>
+                <td class="p-3 text-center hidden sm:table-cell text-gray-400 font-mono">${age}</td>
+                <td class="p-3 text-center hidden sm:table-cell text-gray-400 font-mono">${height}</td>
+                <td class="p-3 text-center hidden sm:table-cell text-gray-400 font-mono">${weight}</td>
+                <td class="p-3 text-center text-gray-400 font-mono">${exp}</td>
+            `;
+            tbody.appendChild(tr);
+        });
 
-          table.classList.remove('hidden');
-      } catch (error) {
-          console.error('Roster fetch error:', error);
-          noData.classList.remove('hidden');
-          noData.textContent = 'Failed to load roster data.';
-      }
+        table.classList.remove('hidden');
+    } catch (error) {
+        console.error('Roster fetch error:', error);
+        noData.classList.remove('hidden');
+        noData.textContent = 'Failed to load roster data.';
     }
-    
+}
     window.closeRosterModal = function() {
       const modal = document.getElementById('rosterModal');
       modal.classList.add('hidden');
