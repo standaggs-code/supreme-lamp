@@ -431,42 +431,61 @@
     }
 
     async function fetchUpcomingSchedule() {
-      try {
-        const d = new Date();
-        const start = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
-        
-        // Using a 6-day lookahead strictly to avoid ESPN's 400 Bad Request error
-        d.setDate(d.getDate() + 6);
-        const end = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
-        
-        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${start}-${end}`);
-        if (!res.ok) throw new Error("Schedule HTTP error");
-        
-        const data = await res.json();
-        STATE.nextEvents = {}; // Reset
-
-        if (data.events) {
-          // Sort chronologically
-          const sortedEvents = data.events.sort((a, b) => new Date(a.date) - new Date(b.date));
-          
-          sortedEvents.forEach(ev => {
-            const comp = ev.competitions[0];
-            const awayId = comp.competitors.find(c => c.homeAway === 'away').id;
-            const homeId = comp.competitors.find(c => c.homeAway === 'home').id;
+    try {
+        // Fetch the next 5 days individually to bypass ESPN's strict date-range limits
+        const fetchPromises = [];
+        for (let i = 0; i < 5; i++) {
+            const d = new Date();
+            d.setDate(d.getDate() + i);
+            const dateString = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
             
-            // Only assign if it's not a game already handled as "today's live game"
-            if (STATE.liveGames[awayId] && STATE.liveGames[awayId].id === ev.id) return;
-            
-            if (!STATE.nextEvents[awayId]) STATE.nextEvents[awayId] = ev;
-            if (!STATE.nextEvents[homeId]) STATE.nextEvents[homeId] = ev;
-          });
+            fetchPromises.push(
+                fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${dateString}`)
+                .then(res => res.json())
+            );
         }
-        renderDashboard();
-      } catch (err) {
-        console.error("Upcoming schedule fetch error:", err);
-      }
-    }
 
+        const results = await Promise.all(fetchPromises);
+        
+        // Combine all events from the 5 days
+        const allEvents = [];
+        results.forEach(data => {
+            if (data.events) {
+                allEvents.push(...data.events);
+            }
+        });
+
+        // Rebuild the scheduleMap
+        allEvents.forEach(game => {
+            const dateObj = new Date(game.date);
+            const isFinal = game.status.type.completed;
+            const statusStr = isFinal ? 'Final' : dateObj.toLocaleDateString([], { weekday: 'short', month: 'numeric', day: 'numeric' });
+            
+            game.competitions[0].competitors.forEach(team => {
+                const teamId = team.team.id;
+                const isHome = team.homeAway === 'home';
+                const opponent = game.competitions[0].competitors.find(c => c.team.id !== teamId);
+                
+                if (opponent) {
+                    const vsAt = isHome ? 'vs' : '@';
+                    let scoreStr = '';
+                    if (isFinal) {
+                        const myScore = team.score;
+                        const oppScore = opponent.score;
+                        scoreStr = ` (${myScore}-${oppScore})`;
+                    }
+                    
+                    if (!scheduleMap[teamId]) {
+                        scheduleMap[teamId] = `${statusStr} ${vsAt} ${opponent.team.abbreviation}${scoreStr}`;
+                    }
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Upcoming schedule fetch error:', error);
+    }
+}
+    
     // --- Modal Roster Logic ---
     window.openRosterModal = async function(teamId, teamName, teamLogo) {
       const modal = document.getElementById('rosterModal');
