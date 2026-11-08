@@ -491,48 +491,72 @@ async function fetchUpcomingSchedule() {
 }
     
     // --- Modal Roster Logic ---
-    window.openRosterModal = async function(teamId, teamName, teamLogo) {
-      const modal = document.getElementById('rosterModal');
-      const content = document.getElementById('modalContentArea');
-      
-      document.getElementById('modalTeamName').innerText = teamName;
-      document.getElementById('modalTeamLogo').src = teamLogo;
-      
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
-      
-      // Loading State
-      content.innerHTML = `
-        <div class="flex flex-col items-center justify-center p-12 text-gray-500 gap-3">
-          <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-blue-500"></i>
-          <span class="font-mono text-xs uppercase tracking-widest">Fetching Roster...</span>
-        </div>
-      `;
-      lucide.createIcons();
+async function openRosterModal(teamId, teamName, logoUrl) {
+    const modal = document.getElementById('rosterModal');
+    const title = document.getElementById('rosterTeamName');
+    const logo = document.getElementById('rosterTeamLogo');
+    const tbody = document.getElementById('rosterTableBody');
+    const noData = document.getElementById('rosterNoData');
+    const table = document.getElementById('rosterTable');
 
-      try {
+    // Reset modal state
+    title.textContent = teamName;
+    logo.src = logoUrl;
+    tbody.innerHTML = '';
+    noData.classList.add('hidden');
+    table.classList.add('hidden');
+    modal.classList.remove('hidden');
+
+    try {
         const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${teamId}/roster`);
         const data = await res.json();
-        
-        let athletes = [];
-        if (data.athletes && Array.isArray(data.athletes)) {
-          // Sometimes wrapped in category arrays (e.g. offensive/defensive)
-          data.athletes.forEach(group => {
-            if (group.items) athletes.push(...group.items);
-          });
+
+        // FIX: ESPN nests the player list inside athletes[0].items
+        const players = data.athletes?.[0]?.items || [];
+
+        if (players.length === 0) {
+            noData.classList.remove('hidden');
+            noData.textContent = 'No roster data available right now.';
+            return;
         }
 
-        if (athletes.length === 0) {
-          content.innerHTML = `<div class="p-8 text-center text-gray-400 font-mono text-sm">No roster data available right now.</div>`;
-          return;
-        }
-
-        // Sort by Jersey Number numerically
-        athletes.sort((a, b) => {
-          const numA = parseInt(a.jersey) || 999; // Default unassigned to bottom
-          const numB = parseInt(b.jersey) || 999;
-          return numA - numB;
+        // Sort players numerically by jersey number
+        players.sort((a, b) => {
+            const aNum = parseInt(a.jersey) || 999;
+            const bNum = parseInt(b.jersey) || 999;
+            return aNum - bNum;
         });
+
+        players.forEach(player => {
+            const tr = document.createElement('tr');
+            tr.className = 'border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors text-sm';
+            
+            // Handle potentially missing nested stats gracefully
+            const age = player.age || '-';
+            const height = player.displayHeight || '-';
+            const weight = player.displayWeight || '-';
+            const exp = player.experience?.years === 0 ? 'R' : (player.experience?.years || '-');
+            const pos = player.position?.abbreviation || '-';
+            
+            tr.innerHTML = `
+                <td class="p-3 text-slate-400 text-center">${player.jersey || '-'}</td>
+                <td class="p-3 font-medium text-slate-200">${player.fullName}</td>
+                <td class="p-3 text-center">${pos}</td>
+                <td class="p-3 text-center hidden sm:table-cell">${age}</td>
+                <td class="p-3 text-center hidden sm:table-cell">${height}</td>
+                <td class="p-3 text-center hidden sm:table-cell">${weight}</td>
+                <td class="p-3 text-center">${exp}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        table.classList.remove('hidden');
+    } catch (error) {
+        console.error('Roster fetch error:', error);
+        noData.classList.remove('hidden');
+        noData.textContent = 'Failed to load roster data.';
+    }
+}
 
         const rowsHtml = athletes.map(p => `
           <tr class="border-b border-court-border/40 hover:bg-white/5 transition-colors">
