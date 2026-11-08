@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NBA Live CourtSide</title>
+  <link id="pwaManifest" rel="manifest" href="">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap');
+    
+    body { font-family: 'Inter', sans-serif; background-color: #0B0E14; color: #E2E8F0; overflow-x: hidden; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    /* Hide scrollbar for ticker */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Glow Effects */
+    .text-glow { text-shadow: 0 0 20px rgba(255,255,255,0.15); }
+    .badge-glow { box-shadow: 0 0 10px currentColor; }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            court: {
+              dark: '#11151E',
+              card: '#1A202C',
+              border: '#2D3748',
+              muted: '#718096',
+              teal: '#00B2A9',
+              pink: '#EF426F',
+              gold: '#F6A800',
+              orange: '#DD6B20'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Header / Navigation -->
+  <header class="sticky top-0 z-50 bg-court-dark/90 backdrop-blur-md border-b border-court-border">
+    <div class="max-w-7xl mx-auto px-3 sm:px-6">
+      
+      <!-- Top Row: Logo, Team Selector, Controls -->
+      <div class="h-16 flex items-center justify-between gap-4">
+        <!-- Logo & Dropdown -->
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center font-black text-white text-xs shadow-lg" id="selectedTeamAvatar" style="background-color: #00B2A9;">
+            SAS
+          </div>
+          <div class="relative" id="customDropdownContainer">
+            <button id="teamDropdownBtn" class="flex items-center justify-between gap-3 bg-court-card border border-court-border rounded-lg px-3 py-1.5 text-left text-white font-black text-sm sm:text-base hover:border-court-muted transition focus:outline-none shadow-md">
+              <span id="teamDropdownLabel">San Antonio Spurs</span>
+              <i data-lucide="chevron-down" class="w-4 h-4 text-court-muted pointer-events-none"></i>
+            </button>
+            <div id="teamDropdownMenu" class="absolute z-50 mt-1.5 w-64 bg-[#151a23] border border-court-border rounded-xl shadow-2xl overflow-y-auto max-h-96 hidden flex-col py-1">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex items-center gap-2 sm:gap-4">
+          <button id="installAppBtn" class="hidden items-center gap-1.5 text-[11px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/30 transition hover:bg-amber-500/20">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Install PWA</span>
+          </button>
+          <button id="autoScrollBtn" class="hidden sm:flex items-center gap-1.5 text-[11px] font-mono font-bold text-court-teal bg-court-card px-2.5 py-1.5 rounded-lg border border-court-border transition hover:bg-white/5">
+            <i data-lucide="arrow-down-to-line" class="w-3.5 h-3.5"></i>
+            <span id="autoScrollLabel">Auto-Scroll: ON</span>
+          </button>
+          <div id="livePill" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-court-card border border-court-border text-court-muted font-mono font-bold text-[11px]">
+            <span id="livePillText">STANDBY</span>
+          </div>
+          <button id="refreshBtn" class="p-1.5 rounded-lg bg-court-card hover:bg-white/10 border border-court-border transition text-gray-300">
+            <i data-lucide="refresh-cw" class="w-4 h-4" id="refreshIcon"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Toggle Button Row -->
+      <div class="w-full flex justify-center pb-1 mt-[-4px]">
+        <button id="toggleGamesBtn" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-court-card border border-court-border text-[10px] font-mono font-bold text-court-muted hover:text-white transition-colors shadow-sm relative z-10">
+          <span id="toggleGamesText">SHOW SCORES</span>
+          <i data-lucide="chevron-down" id="toggleGamesIcon" class="w-3.5 h-3.5 transition-transform duration-300"></i>
+        </button>
+      </div>
+
+      <!-- Bottom Row: Today's Games Carousel -->
+      <div id="gamesTickerWrapper" class="grid transition-all duration-300 ease-in-out" style="grid-template-rows: 0fr;">
+        <div class="overflow-hidden">
+          <div class="pb-3 flex flex-wrap items-center gap-2" id="gamesTicker">
+            <span class="text-[11px] text-court-muted font-mono animate-pulse">Loading today's games...</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <!-- Accent Line -->
+    <div id="teamAccentStrip" class="h-1 w-full" style="background: linear-gradient(90deg, #00B2A9, #EF426F);"></div>
+  </header>
+
+  <!-- Main Application Area -->
+  <main class="flex-grow max-w-7xl mx-auto w-full px-3 sm:px-6 py-4 sm:py-6 flex flex-col gap-4 relative">
+    
+    <!-- Large Background Watermark -->
+    <div class="absolute top-20 left-1/2 -translate-x-1/2 text-[15rem] md:text-[25rem] font-black text-white/[0.02] pointer-events-none select-none z-0" id="watermarkTricode">
+      SAS
+    </div>
+
+    <!-- 1. Off-Day / Fallback View -->
+    <section id="offDayBanner" class="hidden relative z-10 w-full bg-court-card/60 backdrop-blur border border-court-border rounded-2xl p-6 md:p-10 text-center flex flex-col items-center justify-center min-h-[50vh]">
+      <i data-lucide="calendar-x" class="w-16 h-16 text-court-muted mb-4"></i>
+      <h2 id="offDayTitle" class="text-2xl md:text-3xl font-black text-white mb-2">No Game Scheduled Today</h2>
+      <p class="text-gray-400 max-w-md mx-auto mb-8">Select another team from the dropdown above, or jump into one of these active matchups happening right now.</p>
+      
+      <div class="w-full max-w-3xl">
+        <h3 class="text-left text-xs font-bold uppercase tracking-wider text-court-muted mb-3 font-mono">Today's Active Games</h3>
+        <div id="activeMatchupsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-left">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. Hero Scoreboard (Hidden if no game) -->
+    <section id="scoreboardSection" class="relative z-10 w-full bg-court-dark/80 backdrop-blur-md border border-court-border rounded-3xl p-4 sm:p-6 shadow-2xl overflow-hidden hidden">
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+        
+        <!-- Away Team -->
+        <div class="md:col-span-4 flex items-center justify-between gap-3 order-2 md:order-1">
+          <div class="flex items-center gap-3">
+            <div class="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl bg-court-card border border-court-border p-2 flex items-center justify-center shadow-lg">
+              <img id="awayLogo" src="" alt="Away Logo" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/64x64/1a202c/ffffff?text=AWY'">
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span id="awayTricode" class="text-xs font-mono uppercase text-gray-400 font-bold">AWAY</span>
+                <span id="awayRecord" class="text-[10px] text-gray-500 font-mono">(--)</span>
+              </div>
+              <h2 id="awayName" class="text-base sm:text-lg font-extrabold text-white leading-tight">Away Team</h2>
+              <div class="flex items-center gap-2 text-[11px] text-gray-400 mt-1">
+                <span>FG: <strong id="awayFG" class="text-white font-mono">-</strong></span>
+                <span>•</span>
+                <span>3PT: <strong id="away3PT" class="text-white font-mono">-</strong></span>
+                <span>•</span>
+                <span>TO: <strong id="awayTO" class="text-white font-mono">-</strong></span>
+              </div>
+            </div>
+          </div>
+          <div id="awayScore" class="text-4xl sm:text-5xl font-black font-mono text-white tracking-tight text-glow">
+            --
+          </div>
+        </div>
+
+        <!-- Center: Game Clock & Quarterly Score -->
+        <div class="md:col-span-4 flex flex-col items-center justify-center text-center order-1 md:order-2 border-b md:border-b-0 md:border-x border-court-border/50 pb-4 md:pb-0 px-2">
+          
+          <div class="flex items-center gap-2 mb-1">
+            <span id="periodBadge" class="bg-white text-black px-2 py-0.5 rounded text-sm font-black tracking-wider">PRE</span>
+            <span id="clockDisplay" class="text-2xl sm:text-3xl font-black font-mono text-white text-glow">00:00</span>
+          </div>
+          <div id="gameStatusSubtext" class="text-xs text-court-muted font-medium mb-3">
+            Tip-off Scheduled
+          </div>
+
+          <!-- Broadcast & Listen Live -->
+          <div id="broadcastInfoContainer" class="flex flex-col items-center gap-2 mb-3 hidden">
+            <span id="tvBroadcastLabel" class="text-[10px] font-mono font-bold text-court-muted uppercase tracking-widest border border-court-border rounded px-2 py-0.5 bg-court-card/50">TV: TBD</span>
+            <button id="listenLiveBtn" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-court-card border border-court-border text-[11px] font-mono font-bold text-gray-300 hover:text-white hover:border-court-muted transition shadow-sm cursor-pointer">
+              <span>🎧 Listen Live</span>
+              <i data-lucide="external-link" class="w-3 h-3"></i>
+            </button>
+          </div>
+
+          <!-- Dynamic Quarter by Quarter Line Score Table -->
+          <div id="quarterlyScoreboardContainer" class="w-full max-w-[320px] bg-court-card/80 rounded-xl p-2 border border-court-border text-[11px] font-mono shadow-inner overflow-x-auto">
+            <!-- Rendered by JS -->
+          </div>
+
+          <!-- Scoring Run / Lead Indicator -->
+          <div class="w-full max-w-[260px] mt-2 flex items-center justify-between text-[10px] font-mono text-court-muted">
+            <span id="leadStatusLabel">TIED GAME</span>
+            <span id="possessionDisplay" class="text-court-teal font-bold flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-court-teal"></span> LIVE TRACK
+            </span>
+          </div>
+
+        </div>
+
+        <!-- Home Team -->
+        <div class="md:col-span-4 flex items-center justify-between md:justify-end gap-3 order-3 md:order-3">
+          <div id="homeScore" class="text-4xl sm:text-5xl font-black font-mono text-white tracking-tight text-glow order-1 md:order-1">
+            --
+          </div>
+          <div class="flex items-center gap-3 order-2 md:order-2 text-right">
+            <div>
+              <div class="flex items-center justify-end gap-1.5">
+                <span id="homeRecord" class="text-[10px] text-gray-500 font-mono">(--)</span>
+                <span id="homeTricode" class="text-xs font-mono uppercase text-gray-400 font-bold">HOME</span>
+              </div>
+              <h2 id="homeName" class="text-base sm:text-lg font-extrabold text-white leading-tight">Home Team</h2>
+              <div class="flex items-center justify-end gap-2 text-[11px] text-gray-400 mt-1">
+                <span>FG: <strong id="homeFG" class="text-white font-mono">-</strong></span>
+                <span>•</span>
+                <span>3PT: <strong id="home3PT" class="text-white font-mono">-</strong></span>
+                <span>•</span>
+                <span>TO: <strong id="homeTO" class="text-white font-mono">-</strong></span>
+              </div>
+            </div>
+            <div class="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl bg-court-card border border-court-border p-2 flex items-center justify-center shadow-lg">
+              <img id="homeLogo" src="" alt="Home Logo" class="max-w-full max-h-full object-contain" onerror="this.src='https://placehold.co/64x64/1a202c/ffffff?text=HME'">
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 3. Live Game Leaders & Momentum Strip -->
+    <section id="gameStatsStrip" class="hidden relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4">
+      
+      <!-- Boxscore Top Performers -->
+      <div class="lg:col-span-7 bg-court-dark border border-court-border rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-court-muted flex items-center gap-1.5 font-mono">
+            <i data-lucide="award" class="w-4 h-4 text-court-gold"></i> Live Game Leaders
+          </span>
+          <span class="text-[10px] font-mono text-gray-400">PTS • REB • AST</span>
+        </div>
+        <div id="leadersContainer" class="grid grid-cols-3 gap-2">
+          <div class="bg-court-card/60 rounded-xl p-3 text-center text-[11px] text-court-muted font-mono col-span-3">
+            Scanning boxscore...
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-Time Momentum Meter -->
+      <div class="lg:col-span-5 bg-court-dark border border-court-border rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-bold uppercase tracking-wider text-court-muted flex items-center gap-1.5 font-mono">
+            <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i> Momentum Swing (Last 12 Plays)
+          </span>
+          <span id="momentumSwingText" class="text-[10px] font-mono font-bold text-gray-400 uppercase">
+            Even Flow
+          </span>
+        </div>
+        <div class="space-y-2 mt-auto">
+          <div class="h-4 w-full bg-court-card rounded-full overflow-hidden flex border border-court-border p-0.5">
+            <div id="momentumFillAway" class="h-full rounded-l-full transition-all duration-700 ease-out" style="width: 50%; background-color: #00B2A9;"></div>
+            <div id="momentumFillHome" class="h-full rounded-r-full transition-all duration-700 ease-out" style="width: 50%; background-color: #EF426F;"></div>
+          </div>
+          <div class="flex items-center justify-between text-[11px] font-mono">
+            <span id="momentumLabelAway" class="font-bold" style="color: #00B2A9;">AWAY 50%</span>
+            <span id="momentumLabelHome" class="font-bold" style="color: #EF426F;">50% HOME</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Run Alert Banner -->
+    <div id="runAlertBanner" class="hidden relative z-10 w-full bg-amber-500/20 border border-amber-500/50 rounded-xl p-3 flex items-center justify-center gap-2 text-amber-400 font-black tracking-widest text-sm animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+      <i data-lucide="flame" class="w-5 h-5"></i>
+      <span id="runAlertText">TEAM ON A 10-0 RUN!</span>
+      <i data-lucide="flame" class="w-5 h-5"></i>
+    </div>
+
+    <!-- 4. Play-by-Play Stream -->
+    <section id="feedSection" class="hidden relative z-10 bg-court-dark border border-court-border rounded-2xl flex flex-col shadow-xl flex-grow overflow-hidden min-h-[500px]">
+      
+      <!-- Feed Header & Filters -->
+      <div class="p-3 sm:p-4 border-b border-court-border bg-court-dark flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <h3 class="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+          <i data-lucide="list-video" class="w-4 h-4 text-court-teal"></i> Live Play Feed
+        </h3>
+        
+        <div class="flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs" id="filterBtnGroup">
+          <button data-filter="all" class="filter-tab active px-3 py-1.5 rounded-lg font-bold bg-white/10 text-white border border-white/20 transition">All Plays</button>
+          <button data-filter="scoring" class="filter-tab px-3 py-1.5 rounded-lg font-bold bg-court-card text-amber-400 hover:text-white border border-court-border transition flex items-center gap-1">⚡ Scoring Only</button>
+          <button data-filter="big" class="filter-tab px-3 py-1.5 rounded-lg font-bold bg-court-card text-court-pink hover:text-white border border-court-border transition flex items-center gap-1">🔥 Big Plays</button>
+          <button data-filter="three" class="filter-tab px-3 py-1.5 rounded-lg font-bold bg-court-card text-court-teal hover:text-white border border-court-border transition">🎯 3-Pointers</button>
+          <button data-filter="dunk_block" class="filter-tab px-3 py-1.5 rounded-lg font-bold bg-court-card text-court-orange hover:text-white border border-court-border transition">🔨 Slams & Blocks</button>
+          <button data-filter="lead_change" class="filter-tab px-3 py-1.5 rounded-lg font-bold bg-court-card text-court-gold hover:text-white border border-court-border transition">🔄 Lead Changes</button>
+        </div>
+      </div>
+
+      <!-- Status Bar -->
+      <div class="px-4 py-2 border-b border-court-border/50 bg-court-card/50 flex items-center justify-between text-[10px] font-mono text-gray-500">
+        <span id="feedCounter">0 plays logged</span>
+        <span id="bigPlaysCountBadge" class="text-court-pink font-bold">0 Big Plays</span>
+      </div>
+
+      <!-- Content Split (Shot Chart + Feed) -->
+      <div class="flex flex-col md:flex-row flex-grow overflow-hidden">
+        <!-- Shot Chart Pane -->
+        <div class="w-full md:w-1/3 bg-court-dark border-b md:border-b-0 md:border-r border-court-border p-4 flex flex-col items-center justify-center relative min-h-[250px]">
+          <h4 class="text-[10px] font-mono text-court-muted uppercase font-bold absolute top-3 left-4">Live Shot Chart</h4>
+          
+          <!-- CSS/SVG Half Court -->
+          <div class="relative w-full max-w-[250px] aspect-[50/47] border-2 border-court-border/50 mt-4 overflow-hidden rounded-sm bg-[#121722]" id="shotChartArea">
+            <!-- Paint -->
+            <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[32%] h-[40%] border-2 border-court-border/50 bg-court-card/30"></div>
+            <!-- Free Throw Circle -->
+            <div class="absolute bottom-[40%] left-1/2 -translate-x-1/2 w-[24%] h-[25%] border-2 border-court-border/50 rounded-full"></div>
+            <!-- 3PT Arc (Simplified Approximation) -->
+            <div class="absolute bottom-[-10%] left-1/2 -translate-x-1/2 w-[88%] h-[75%] border-t-2 border-l-2 border-r-2 border-court-border/50 rounded-t-[50%]"></div>
+            <!-- Rim & Backboard -->
+            <div class="absolute bottom-[5%] left-1/2 -translate-x-1/2 w-4 h-4 border-2 border-[#E56020] rounded-full bg-transparent shadow-[0_0_8px_rgba(229,96,32,0.4)] z-10"></div>
+            <div class="absolute bottom-[4%] left-1/2 -translate-x-1/2 w-10 h-[3px] bg-gray-300 z-10"></div>
+            
+            <!-- Plotting Area for Dots -->
+            <div id="shotPlots" class="absolute inset-0 z-20"></div>
+          </div>
+          <div class="flex items-center gap-4 mt-3 text-[9px] font-mono text-gray-500 font-bold uppercase">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Make</span>
+            <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Miss</span>
+          </div>
+        </div>
+
+        <!-- Scrollable Feed Container -->
+        <div id="playFeedContainer" class="w-full md:w-2/3 overflow-y-auto p-3 sm:p-4 space-y-2.5 h-[400px] md:h-[500px]">
+          <div class="h-full flex flex-col items-center justify-center text-court-muted text-xs">
+            <i data-lucide="loader-2" class="w-8 h-8 mb-2 animate-spin text-court-teal"></i>
+            <span>Waiting for play data...</span>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Footer Footer -->
+  <footer class="mt-auto border-t border-court-border bg-court-dark/80 backdrop-blur-md py-2 px-4 flex items-center justify-between text-[10px] font-mono text-court-muted z-50 relative">
+    <div class="flex items-center gap-2">
+      <div id="statusLed" class="w-2 h-2 rounded-full bg-court-muted"></div>
+      <span id="statusFooterText">System Initializing...</span>
+    </div>
+    <span id="lastUpdatedClock">Updated: --:--:--</span>
+  </footer>
+
+  <script>
+    // --- Data: All 30 NBA Teams ---
+    const NBA_TEAMS = [
+      { id: "1", tricode: "ATL", name: "Atlanta Hawks", short: "Hawks", color: "#E03A3E" },
+      { id: "2", tricode: "BOS", name: "Boston Celtics", short: "Celtics", color: "#007A33" },
+      { id: "17", tricode: "BKN", name: "Brooklyn Nets", short: "Nets", color: "#000000" },
+      { id: "30", tricode: "CHA", name: "Charlotte Hornets", short: "Hornets", color: "#1D1160" },
+      { id: "4", tricode: "CHI", name: "Chicago Bulls", short: "Bulls", color: "#CE1141" },
+      { id: "5", tricode: "CLE", name: "Cleveland Cavaliers", short: "Cavs", color: "#860038" },
+      { id: "6", tricode: "DAL", name: "Dallas Mavericks", short: "Mavericks", color: "#00538C" },
+      { id: "7", tricode: "DEN", name: "Denver Nuggets", short: "Nuggets", color: "#0E2240" },
+      { id: "8", tricode: "DET", name: "Detroit Pistons", short: "Pistons", color: "#C8102E" },
+      { id: "9", tricode: "GSW", name: "Golden State Warriors", short: "Warriors", color: "#1D428A" },
+      { id: "10", tricode: "HOU", name: "Houston Rockets", short: "Rockets", color: "#CE1141" },
+      { id: "11", tricode: "IND", name: "Indiana Pacers", short: "Pacers", color: "#002D62" },
+      { id: "12", tricode: "LAC", name: "LA Clippers", short: "Clippers", color: "#C8102E" },
+      { id: "13", tricode: "LAL", name: "Los Angeles Lakers", short: "Lakers", color: "#552583", accent: "#FDB927" },
+      { id: "29", tricode: "MEM", name: "Memphis Grizzlies", short: "Grizzlies", color: "#5D76A9" },
+      { id: "14", tricode: "MIA", name: "Miami Heat", short: "Heat", color: "#98002E" },
+      { id: "15", tricode: "MIL", name: "Milwaukee Bucks", short: "Bucks", color: "#00471B" },
+      { id: "16", tricode: "MIN", name: "Minnesota Timberwolves", short: "Timberwolves", color: "#0C2340" },
+      { id: "3", tricode: "NOP", name: "New Orleans Pelicans", short: "Pelicans", color: "#0C2340" },
+      { id: "18", tricode: "NYK", name: "New York Knicks", short: "Knicks", color: "#006BB6" },
+      { id: "25", tricode: "OKC", name: "Oklahoma City Thunder", short: "Thunder", color: "#007AC1" },
+      { id: "19", tricode: "ORL", name: "Orlando Magic", short: "Magic", color: "#0077C0" },
+      { id: "20", tricode: "PHI", name: "Philadelphia 76ers", short: "76ers", color: "#006BB6" },
+      { id: "21", tricode: "PHX", name: "Phoenix Suns", short: "Suns", color: "#1D1160", accent: "#E56020" },
+      { id: "22", tricode: "POR", name: "Portland Trail Blazers", short: "Blazers", color: "#E03A3E" },
+      { id: "23", tricode: "SAC", name: "Sacramento Kings", short: "Kings", color: "#5A2D81" },
+      { id: "24", tricode: "SAS", name: "San Antonio Spurs", short: "Spurs", color: "#00B2A9", accent: "#EF426F" },
+      { id: "28", tricode: "TOR", name: "Toronto Raptors", short: "Raptors", color: "#CE1141" },
+      { id: "26", tricode: "UTA", name: "Utah Jazz", short: "Jazz", color: "#002B5C" },
+      { id: "27", tricode: "WAS", name: "Washington Wizards", short: "Wizards", color: "#002B5C", accent: "#E31837" }
+    ];
+
+    // --- State Machine ---
+    const STATE = {
+      selectedTeamId: "24", // Default: SAS
+      activeEventId: null,
+      activeFilter: "all",
+      autoScroll: true,
+      pollIntervalMs: 6000,
+      pollTimer: null,
+      isFetching: false,
+      allEventsToday: [],
+      plays: [],
+      seenPlayIds: new Set(),
+      linescoreStore: {}, // Cache: key -> array of quarter scores
+      cachedAwayComp: null,
+      cachedHomeComp: null,
+      cachedPeriod: 1,
+      cachedIsLive: false,
+      cachedStats: { away: null, home: null },
+      cachedLeadersHtml: null,
+      isTickerExpanded: window.innerWidth >= 640
+    };
+
+    // --- DOM Elements ---
+    const dom = {
+      teamDropdownBtn: document.getElementById('teamDropdownBtn'),
+      teamDropdownLabel: document.getElementById('teamDropdownLabel'),
+      teamDropdownMenu: document.getElementById('teamDropdownMenu'),
+      selectedTeamAvatar: document.getElementById('selectedTeamAvatar'),
+      teamAccentStrip: document.getElementById('teamAccentStrip'),
+      gamesTickerWrapper: document.getElementById('gamesTickerWrapper'),
+      gamesTicker: document.getElementById('gamesTicker'),
+      toggleGamesBtn: document.getElementById('toggleGamesBtn'),
+      toggleGamesText: document.getElementById('toggleGamesText'),
+      livePill: document.getElementById('livePill'),
+      livePillText: document.getElementById('livePillText'),
+      installAppBtn: document.getElementById('installAppBtn'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      refreshIcon: document.getElementById('refreshIcon'),
+      autoScrollBtn: document.getElementById('autoScrollBtn'),
+      autoScrollLabel: document.getElementById('autoScrollLabel'),
+      bigPlaysCountBadge: document.getElementById('bigPlaysCountBadge'),
+      watermarkTricode: document.getElementById('watermarkTricode'),
+      
+      scoreboardSection: document.getElementById('scoreboardSection'),
+      awayLogo: document.getElementById('awayLogo'),
+      awayTricode: document.getElementById('awayTricode'),
+      awayRecord: document.getElementById('awayRecord'),
+      awayName: document.getElementById('awayName'),
+      awayScore: document.getElementById('awayScore'),
+      awayFG: document.getElementById('awayFG'),
+      away3PT: document.getElementById('away3PT'),
+      awayTO: document.getElementById('awayTO'),
+
+      homeLogo: document.getElementById('homeLogo'),
+      homeTricode: document.getElementById('homeTricode'),
+      homeRecord: document.getElementById('homeRecord'),
+      homeName: document.getElementById('homeName'),
+      homeScore: document.getElementById('homeScore'),
+      homeFG: document.getElementById('homeFG'),
+      home3PT: document.getElementById('home3PT'),
+      homeTO: document.getElementById('homeTO'),
+
+      periodBadge: document.getElementById('periodBadge'),
+      clockDisplay: document.getElementById('clockDisplay'),
+      gameStatusSubtext: document.getElementById('gameStatusSubtext'),
+      broadcastInfoContainer: document.getElementById('broadcastInfoContainer'),
+      tvBroadcastLabel: document.getElementById('tvBroadcastLabel'),
+      listenLiveBtn: document.getElementById('listenLiveBtn'),
+      leadStatusLabel: document.getElementById('leadStatusLabel'),
+      possessionDisplay: document.getElementById('possessionDisplay'),
+      quarterlyContainer: document.getElementById('quarterlyScoreboardContainer'),
+
+      gameStatsStrip: document.getElementById('gameStatsStrip'),
+      leadersContainer: document.getElementById('leadersContainer'),
+      momentumSwingText: document.getElementById('momentumSwingText'),
+      momentumFillAway: document.getElementById('momentumFillAway'),
+      momentumFillHome: document.getElementById('momentumFillHome'),
+      momentumLabelAway: document.getElementById('momentumLabelAway'),
+      momentumLabelHome: document.getElementById('momentumLabelHome'),
+
+      runAlertBanner: document.getElementById('runAlertBanner'),
+      runAlertText: document.getElementById('runAlertText'),
+      shotPlots: document.getElementById('shotPlots'),
+      offDayBanner: document.getElementById('offDayBanner'),
+      offDayTitle: document.getElementById('offDayTitle'),
+      activeMatchupsGrid: document.getElementById('activeMatchupsGrid'),
+      feedSection: document.getElementById('feedSection'),
+      feedContainer: document.getElementById('playFeedContainer'),
+      feedCounter: document.getElementById('feedCounter'),
+      lastUpdatedClock: document.getElementById('lastUpdatedClock'),
+      statusFooterText: document.getElementById('statusFooterText'),
+      statusLed: document.getElementById('statusLed'),
+    };
+
+    // --- Initialize ---
+    function init() {
+      lucide.createIcons();
+      initPWA();
+      initTeamDropdown();
+      setupEventListeners();
+      startPollingLoop();
+      updateTickerState();
+    }
+
+    function initPWA() {
+      // 1. Inline Manifest via Blob
+      const manifest = {
+        name: "NBA Live CourtSide",
+        short_name: "CourtSide",
+        display: "standalone",
+        background_color: "#0B0E14",
+        theme_color: "#0B0E14",
+        start_url: ".",
+        icons: [{ src: "https://placehold.co/192x192/00B2A9/ffffff?text=NBA", sizes: "192x192", type: "image/png" }]
+      };
+      const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+      document.getElementById('pwaManifest').href = URL.createObjectURL(manifestBlob);
+
+      // 2. Inline Service Worker via Blob (Cache-free bypass)
+      const swCode = `
+        self.addEventListener('install', e => self.skipWaiting());
+        self.addEventListener('activate', e => self.clients.claim());
+        self.addEventListener('fetch', e => {}); 
+      `;
+      const swBlob = new Blob([swCode], { type: 'application/javascript' });
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(console.error);
+      }
+
+      // 3. Handle Install Prompt
+      window.deferredInstallPrompt = null;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        window.deferredInstallPrompt = e;
+        dom.installAppBtn.classList.remove('hidden');
+        dom.installAppBtn.style.display = 'flex';
+      });
+
+      dom.installAppBtn.addEventListener('click', async () => {
+        if (window.deferredInstallPrompt) {
+          window.deferredInstallPrompt.prompt();
+          const { outcome } = await window.deferredInstallPrompt.userChoice;
+          if (outcome === 'accepted') {
+            dom.installAppBtn.classList.add('hidden');
+          }
+          window.deferredInstallPrompt = null;
+        }
+      });
+    }
+
+    function initTeamDropdown() {
+      const sorted = [...NBA_TEAMS].sort((a, b) => a.name.localeCompare(b.name));
+      dom.teamDropdownMenu.innerHTML = sorted.map(t => `
+        <button class="team-option flex items-center justify-between w-full px-4 py-2.5 text-left text-sm font-bold hover:bg-court-card text-gray-300 transition" data-team-id="${t.id}">
+          <span>${t.name}</span>
+          <div class="flex items-center gap-2">
+            <span class="playing-indicator hidden w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]" title="Playing Today"></span>
+          </div>
+        </button>
+      `).join('');
+      
+      const updateLabel = () => {
+        const team = NBA_TEAMS.find(t => t.id === STATE.selectedTeamId);
+        if(team) dom.teamDropdownLabel.innerText = team.name;
+      };
+      
+      dom.teamDropdownMenu.querySelectorAll('.team-option').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          STATE.selectedTeamId = e.currentTarget.getAttribute('data-team-id');
+          updateLabel();
+          dom.teamDropdownMenu.classList.add('hidden');
+          applyTeamTheme(STATE.selectedTeamId); 
+          locateActiveGameForSelectedTeam();
+        });
+      });
+      
+      updateLabel();
+      applyTeamTheme(STATE.selectedTeamId);
+    }
+
+    function updateDropdownIndicators() {
+      if(!dom.teamDropdownMenu) return;
+      const playingTeamIds = new Set();
+      STATE.allEventsToday.forEach(ev => {
+        ev.competitions?.[0]?.competitors?.forEach(c => {
+          if (c.id || c.team?.id) playingTeamIds.add(c.id || c.team.id);
+        });
+      });
+      
+      dom.teamDropdownMenu.querySelectorAll('.team-option').forEach(btn => {
+        const tid = btn.getAttribute('data-team-id');
+        const ind = btn.querySelector('.playing-indicator');
+        if(playingTeamIds.has(tid)) {
+          ind.classList.remove('hidden');
+        } else {
+          ind.classList.add('hidden');
+        }
+      });
+    }
+
+    function applyTeamTheme(teamId) {
+      const team = NBA_TEAMS.find(t => t.id === teamId) || NBA_TEAMS[0];
+      dom.selectedTeamAvatar.innerText = team.tricode;
+      dom.selectedTeamAvatar.style.backgroundColor = team.color;
+      dom.watermarkTricode.innerText = team.tricode;
+      
+      // Update accent strip to feature primary and accent colors
+      dom.teamAccentStrip.style.background = `linear-gradient(90deg, ${team.color}, ${team.accent || '#c4ced4'}, ${team.color})`;
+      
+      // Apply a subtle, immersive radial background glow using the team's primary hex color
+      // (Adding '20' to the hex string applies ~12% opacity)
+      document.body.style.background = `radial-gradient(circle at top center, ${team.color}20 0%, #0B0E14 45%, #0B0E14 100%)`;
+    }
+
+    function updateTickerState() {
+      const icon = document.getElementById('toggleGamesIcon');
+      if (STATE.isTickerExpanded) {
+        dom.gamesTickerWrapper.style.gridTemplateRows = '1fr';
+        if (icon) icon.classList.add('rotate-180');
+        if (dom.toggleGamesText) dom.toggleGamesText.innerText = 'HIDE SCORES';
+      } else {
+        dom.gamesTickerWrapper.style.gridTemplateRows = '0fr';
+        if (icon) icon.classList.remove('rotate-180');
+        if (dom.toggleGamesText) dom.toggleGamesText.innerText = 'SHOW SCORES';
+      }
+    }
+
+    // --- Caching Linescores ---
+    function storeLinescores(gameId, side, rawLines) {
+      if (!gameId || !side || !Array.isArray(rawLines) || rawLines.length === 0) return;
+      const parsed = rawLines.map(ls => {
+        if (ls === null || ls === undefined) return null;
+        if (typeof ls === 'number') return ls;
+        const val = ls.displayValue ?? ls.value ?? ls.score;
+        const num = parseInt(val, 10);
+        return isNaN(num) ? val : num;
+      }).filter(v => v !== null && v !== undefined && v !== '');
+
+      const storeKey = `${gameId}_${side}`;
+      if (parsed.length > 0) STATE.linescoreStore[storeKey] = parsed;
+    }
+
+    // --- Dynamic Quarter/OT Renderer ---
+    function renderQuarterlyScorecard(gameId, awayComp, homeComp, currentPeriod, isLive) {
+      if (!dom.quarterlyContainer) return;
+      const awayScores = STATE.linescoreStore[`${gameId}_away`] || [];
+      const homeScores = STATE.linescoreStore[`${gameId}_home`] || [];
+      const maxPeriods = Math.max(4, awayScores.length, homeScores.length, currentPeriod || 1);
+      
+      const pHeaders = Array.from({length: maxPeriods}, (_, i) => {
+        const p = i + 1;
+        return {
+          num: p,
+          label: p <= 4 ? `${p}` : `OT${p - 4}`,
+          active: isLive && (currentPeriod === p)
+        };
+      });
+
+      const awayCode = awayComp?.team?.abbreviation || 'AWY';
+      const homeCode = homeComp?.team?.abbreviation || 'HME';
+
+      const tableHtml = `
+        <table class="w-full text-center border-collapse text-[11px] font-mono select-none">
+          <thead>
+            <tr class="text-[10px] text-court-muted border-b border-court-border/70 pb-1">
+              <th class="py-1 px-1.5 text-left font-bold text-gray-400">TEAM</th>
+              ${pHeaders.map(ph => `<th class="py-1 px-1 font-bold ${ph.active ? 'text-court-teal bg-court-teal/15 rounded-t ring-1 ring-court-teal/30' : ''}">${ph.label}</th>`).join('')}
+              <th class="py-1 px-1.5 text-right font-black text-white">T</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="text-gray-300 border-b border-court-border/30">
+              <td class="py-1 px-1.5 text-left font-bold text-gray-400">${awayCode}</td>
+              ${pHeaders.map(ph => `<td class="py-1 px-1 font-medium ${ph.active ? 'text-white font-black bg-court-teal/10' : ''}">${awayScores[ph.num - 1] ?? '-'}</td>`).join('')}
+              <td class="py-1 px-1.5 text-right font-black text-white">${awayComp?.score ?? '--'}</td>
+            </tr>
+            <tr class="text-gray-300">
+              <td class="py-1 px-1.5 text-left font-bold text-gray-400">${homeCode}</td>
+              ${pHeaders.map(ph => `<td class="py-1 px-1 font-medium ${ph.active ? 'text-white font-black bg-court-teal/10' : ''}">${homeScores[ph.num - 1] ?? '-'}</td>`).join('')}
+              <td class="py-1 px-1.5 text-right font-black text-white">${homeComp?.score ?? '--'}</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+      dom.quarterlyContainer.innerHTML = tableHtml;
+    }
+
+    // --- ESPN Data Fetching ---
+    async function fetchScoreboardData() {
+      try {
+        const res = await fetch("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard");
+        if (!res.ok) throw new Error("HTTP error");
+        const data = await res.json();
+        STATE.allEventsToday = data.events || [];
+        renderGamesTicker();
+        locateActiveGameForSelectedTeam();
+      } catch (err) {
+        console.error("Scoreboard fetch error:", err);
+        dom.statusFooterText.innerText = "Network error: Scoreboard. Retrying...";
+        dom.statusLed.className = "w-2 h-2 rounded-full bg-amber-500 animate-ping";
+      }
+    }
+
+    function renderGamesTicker() {
+      if (STATE.allEventsToday.length === 0) {
+        dom.gamesTicker.innerHTML = `<span class="text-[11px] text-gray-500 font-mono">No NBA games today.</span>`;
+        return;
+      }
+      dom.gamesTicker.innerHTML = STATE.allEventsToday.map(ev => {
+        const comps = ev.competitions?.[0]?.competitors || [];
+        const away = comps.find(c => c.homeAway === 'away') || {};
+        const home = comps.find(c => c.homeAway === 'home') || {};
+        const isLive = ev.status?.type?.state === 'in';
+        const isPost = ev.status?.type?.state === 'post';
+        const isSelected = ev.id === STATE.activeEventId;
+        
+        // Clutch Logic
+        const aScore = parseInt(away.score || 0);
+        const hScore = parseInt(home.score || 0);
+        const diff = Math.abs(aScore - hScore);
+        const period = ev.status?.period || 0;
+        const isClutch = isLive && period >= 4 && diff <= 5;
+        
+        let displayStr = "";
+        if (isLive || isPost) {
+           displayStr = `${away.team?.abbreviation} ${away.score ?? '-'} - ${home.team?.abbreviation} ${home.score ?? '-'}${isClutch ? ' 🔥' : ''}`;
+        } else {
+           let timeStr = ev.status?.type?.shortDetail || '';
+           displayStr = `${away.team?.abbreviation} @ ${home.team?.abbreviation} ${timeStr}`;
+        }
+        
+        const baseClass = "flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold transition flex-shrink-0 cursor-pointer";
+        let stateClass = isSelected ? "bg-court-teal text-white shadow-[0_0_8px_rgba(0,178,169,0.5)]" : 
+                           isLive ? "bg-emerald-900/40 text-emerald-400 hover:bg-emerald-900/60 border border-emerald-500/30" : 
+                           "bg-gray-800 text-gray-300 hover:bg-gray-700 border border-transparent";
+                           
+        if (isClutch && !isSelected) {
+            stateClass = "bg-amber-900/60 text-amber-400 hover:bg-amber-900/80 border border-amber-500 ring-2 ring-amber-500/50 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.5)]";
+        }
+
+        const dot = isLive && !isSelected && !isClutch ? `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>` : ``;
+
+        return `<div onclick="switchGame('${ev.id}')" class="${baseClass} ${stateClass}">${dot}${displayStr}</div>`;
+      }).join('');
+      
+      updateDropdownIndicators();
+    }
+
+    function locateActiveGameForSelectedTeam() {
+      const teamId = STATE.selectedTeamId;
+      const match = STATE.allEventsToday.find(ev => ev.competitions?.[0]?.competitors?.some(c => c.id === teamId || c.team?.id === teamId));
+
+      if (match) {
+        showGameView();
+        if (STATE.activeEventId !== match.id) {
+          STATE.activeEventId = match.id;
+          STATE.plays = [];
+          STATE.seenPlayIds.clear();
+          STATE.cachedStats = { away: null, home: null };
+          STATE.cachedLeadersHtml = null;
+          dom.feedContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-court-muted"><i data-lucide="loader-2" class="w-8 h-8 animate-spin mb-2"></i>Loading summary...</div>`;
+          lucide.createIcons();
+        }
+        renderScoreboardFromEvent(match);
+        fetchPlayByPlaySummary(match.id);
+      } else {
+        STATE.activeEventId = null;
+        renderOffDayView();
+      }
+    }
+
+    window.switchGame = function(eventId) {
+      const ev = STATE.allEventsToday.find(e => e.id === eventId);
+      if (!ev) return;
+      const home = ev.competitions?.[0]?.competitors?.find(c => c.homeAway === 'home');
+      if (home) {
+        STATE.selectedTeamId = home.id || home.team?.id;
+        const team = NBA_TEAMS.find(t => t.id === STATE.selectedTeamId);
+        if (team && dom.teamDropdownLabel) dom.teamDropdownLabel.innerText = team.name;
+        applyTeamTheme(STATE.selectedTeamId);
+      }
+      STATE.activeEventId = eventId;
+      STATE.plays = [];
+      STATE.seenPlayIds.clear();
+      STATE.cachedStats = { away: null, home: null };
+      STATE.cachedLeadersHtml = null;
+      renderScoreboardFromEvent(ev);
+      fetchPlayByPlaySummary(eventId);
+      renderGamesTicker();
+    };
+
+    function showGameView() {
+      dom.offDayBanner.classList.add('hidden');
+      dom.scoreboardSection.classList.remove('hidden');
+      dom.feedSection.classList.remove('hidden');
+      dom.gameStatsStrip.classList.remove('hidden');
+    }
+
+    function renderScoreboardFromEvent(ev) {
+      const comp = ev.competitions?.[0] || {};
+      const away = comp.competitors?.find(c => c.homeAway === 'away') || {};
+      const home = comp.competitors?.find(c => c.homeAway === 'home') || {};
+      const status = ev.status || {};
+
+      STATE.cachedAwayComp = away; STATE.cachedHomeComp = home;
+      STATE.cachedPeriod = status.period || 1; STATE.cachedIsLive = status.type?.state === 'in';
+
+      storeLinescores(ev.id, 'away', away.linescores);
+      storeLinescores(ev.id, 'home', home.linescores);
+
+      dom.awayName.innerText = away.team?.shortDisplayName || 'Away';
+      dom.awayTricode.innerText = away.team?.abbreviation || 'AWY';
+      dom.awayLogo.src = away.team?.logo || '';
+      dom.awayScore.innerText = away.score ?? '--';
+      dom.awayRecord.innerText = away.records?.[0]?.summary || '';
+      if (!STATE.cachedStats.away) { dom.awayFG.innerText = '-'; dom.away3PT.innerText = '-'; dom.awayTO.innerText = '-'; }
+
+      dom.homeName.innerText = home.team?.shortDisplayName || 'Home';
+      dom.homeTricode.innerText = home.team?.abbreviation || 'HME';
+      dom.homeLogo.src = home.team?.logo || '';
+      dom.homeScore.innerText = home.score ?? '--';
+      dom.homeRecord.innerText = home.records?.[0]?.summary || '';
+      if (!STATE.cachedStats.home) { dom.homeFG.innerText = '-'; dom.home3PT.innerText = '-'; dom.homeTO.innerText = '-'; }
+
+      dom.clockDisplay.innerText = status.displayClock || '00:00';
+      dom.periodBadge.innerText = status.period ? (status.period > 4 ? `OT${status.period - 4}` : `Q${status.period}`) : 'PRE';
+      dom.gameStatusSubtext.innerText = status.type?.detail || 'NBA Game';
+
+      // Broadcast and Listen Live Setup
+      const broadcasts = comp.broadcasts || [];
+      let tvNetwork = 'N/A';
+      if (broadcasts.length > 0) {
+        const national = broadcasts.find(b => b.market?.toLowerCase() === 'national');
+        const tv = national || broadcasts[0];
+        tvNetwork = tv.names?.[0] || tv.media?.shortName || 'TBD';
+      }
+      dom.tvBroadcastLabel.innerText = `TV: ${tvNetwork}`;
+      dom.broadcastInfoContainer.classList.remove('hidden');
+
+      const isSpursGame = away.team?.id === "24" || home.team?.id === "24";
+      dom.listenLiveBtn.onclick = () => {
+        const url = isSpursGame 
+            ? 'https://www.iheart.com/live/news-radio-1200-woai-6113/' 
+            : `https://www.espn.com/nba/game/_/gameId/${ev.id}`;
+        // Opens a minimal popup window for the radio/gamecast
+        window.open(url, 'RadioPlayer', 'width=450,height=700,menubar=no,toolbar=no,location=no');
+      };
+
+      if (STATE.cachedIsLive) {
+        dom.livePill.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono font-bold text-[11px]";
+        dom.livePillText.innerText = "LIVE";
+        dom.possessionDisplay.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> LIVE ACTION`;
+      } else if (status.type?.state === 'post') {
+        dom.livePill.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-700/20 border border-gray-700 text-gray-400 font-mono font-bold text-[11px]";
+        dom.livePillText.innerText = "FINAL";
+        dom.possessionDisplay.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span> GAME FINAL`;
+      } else {
+        dom.livePill.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-court-card border border-court-border text-court-muted font-mono font-bold text-[11px]";
+        dom.livePillText.innerText = "SCHEDULED";
+        dom.possessionDisplay.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-court-muted"></span> PRE-GAME`;
+      }
+
+      renderQuarterlyScorecard(ev.id, away, home, status.period, STATE.cachedIsLive);
+
+      const aSc = parseInt(away.score||0), hSc = parseInt(home.score||0);
+      dom.leadStatusLabel.innerText = aSc > hSc ? `${away.team?.abbreviation} LEADS BY ${aSc - hSc}` : (hSc > aSc ? `${home.team?.abbreviation} LEADS BY ${hSc - aSc}` : "TIED GAME");
+    }
+
+    function extractTeamStats(boxscore, teamId) {
+      if (!boxscore || !boxscore.teams) return null;
+      const teamData = boxscore.teams.find(t => t.team?.id === teamId);
+      if (!teamData || !teamData.statistics) return null;
+      
+      const getStat = (name) => {
+        const stat = teamData.statistics.find(s => s.name === name);
+        return stat ? stat.displayValue : '-';
+      };
+      
+      return {
+        fg: getStat('fieldGoalPct') + '%',
+        pt3: getStat('threePointFieldGoalPct') + '%',
+        to: getStat('turnovers')
+      };
+    }
+
+    function renderTeamStatsDisplay(boxscore, awayComp, homeComp) {
+      const awayStats = extractTeamStats(boxscore, awayComp?.team?.id);
+      if (awayStats) {
+        STATE.cachedStats.away = awayStats;
+        dom.awayFG.innerText = awayStats.fg.replace('-%', '-');
+        dom.away3PT.innerText = awayStats.pt3.replace('-%', '-');
+        dom.awayTO.innerText = awayStats.to;
+      }
+      
+      const homeStats = extractTeamStats(boxscore, homeComp?.team?.id);
+      if (homeStats) {
+        STATE.cachedStats.home = homeStats;
+        dom.homeFG.innerText = homeStats.fg.replace('-%', '-');
+        dom.home3PT.innerText = homeStats.pt3.replace('-%', '-');
+        dom.homeTO.innerText = homeStats.to;
+      }
+    }
+
+    function extractLeaders(boxscore, teamId) {
+      if (!boxscore || !boxscore.players) return { pts: null, reb: null, ast: null };
+      const teamRoster = boxscore.players.find(p => p.team?.id === teamId);
+      if (!teamRoster || !teamRoster.statistics || !teamRoster.statistics.length) return { pts: null, reb: null, ast: null };
+      
+      const stats = teamRoster.statistics[0];
+      if (!stats || !stats.athletes) return { pts: null, reb: null, ast: null };
+      
+      const labels = stats.labels || [];
+      const ptsIdx = labels.indexOf('PTS');
+      const rebIdx = labels.indexOf('REB');
+      const astIdx = labels.indexOf('AST');
+      
+      let leadPts = { val: -1, name: 'N/A' }, leadReb = { val: -1, name: 'N/A' }, leadAst = { val: -1, name: 'N/A' };
+      
+      stats.athletes.forEach(ath => {
+        if (!ath.stats) return;
+        const pVal = ptsIdx >= 0 ? parseFloat(ath.stats[ptsIdx]) || 0 : 0;
+        const rVal = rebIdx >= 0 ? parseFloat(ath.stats[rebIdx]) || 0 : 0;
+        const aVal = astIdx >= 0 ? parseFloat(ath.stats[astIdx]) || 0 : 0;
+        const name = ath.athlete?.shortName || 'N/A';
+        
+        if (pVal > leadPts.val) leadPts = { val: pVal, name };
+        if (rVal > leadReb.val) leadReb = { val: rVal, name };
+        if (aVal > leadAst.val) leadAst = { val: aVal, name };
+      });
+      
+      return {
+        pts: leadPts.val >= 0 ? { displayValue: leadPts.val, shortName: leadPts.name } : null,
+        reb: leadReb.val >= 0 ? { displayValue: leadReb.val, shortName: leadReb.name } : null,
+        ast: leadAst.val >= 0 ? { displayValue: leadAst.val, shortName: leadAst.name } : null,
+      };
+    }
+
+    async function fetchPlayByPlaySummary(eventId) {
+      if (!eventId || STATE.isFetching) return;
+      STATE.isFetching = true; dom.refreshIcon.classList.add('animate-spin');
+      try {
+        const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${eventId}`);
+        if (!res.ok) throw new Error("Summary HTTP error");
+        const data = await res.json();
+
+        // Update scores/linescores from summary
+        const comp = data.header?.competitions?.[0];
+        if (comp?.competitors) {
+          const sumA = comp.competitors.find(c => c.homeAway === 'away');
+          const sumH = comp.competitors.find(c => c.homeAway === 'home');
+          if (sumA?.score) dom.awayScore.innerText = sumA.score;
+          if (sumH?.score) dom.homeScore.innerText = sumH.score;
+          if (sumA?.linescores?.length) storeLinescores(eventId, 'away', sumA.linescores);
+          if (sumH?.linescores?.length) storeLinescores(eventId, 'home', sumH.linescores);
+        }
+        if (data.boxscore?.teams) {
+          data.boxscore.teams.forEach(t => storeLinescores(eventId, t.homeAway || (t.team?.id === STATE.cachedHomeComp?.team?.id ? 'home':'away'), t.linescores));
+        }
+
+        renderQuarterlyScorecard(eventId, STATE.cachedAwayComp, STATE.cachedHomeComp, STATE.cachedPeriod, STATE.cachedIsLive);
+        renderTeamStatsDisplay(data.boxscore, STATE.cachedAwayComp, STATE.cachedHomeComp);
+        renderLeaders(data.boxscore, STATE.cachedAwayComp, STATE.cachedHomeComp);
+        
+        const rawPlays = data.plays || [];
+        processPlays(rawPlays);
+        updateMomentum(STATE.plays, STATE.cachedAwayComp, STATE.cachedHomeComp);
+
+        dom.statusFooterText.innerText = `Connected • Polling OK`;
+        dom.statusLed.className = "w-2 h-2 rounded-full bg-emerald-400";
+        dom.lastUpdatedClock.innerText = `Updated: ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        console.error("Summary error:", err);
+      } finally {
+        STATE.isFetching = false; dom.refreshIcon.classList.remove('animate-spin');
+      }
+    }
+
+    function renderLeaders(boxscore, awayComp, homeComp) {
+      if (!dom.leadersContainer) return;
+      const aId = awayComp?.team?.id, hId = homeComp?.team?.id;
+      const awayL = extractLeaders(boxscore, aId);
+      const homeL = extractLeaders(boxscore, hId);
+      
+      const cats = [
+        { id: 'pts', name: 'Points' },
+        { id: 'reb', name: 'Rebounds' },
+        { id: 'ast', name: 'Assists' }
+      ];
+
+      const hasData = [awayL.pts, awayL.reb, awayL.ast, homeL.pts, homeL.reb, homeL.ast].some(v => v !== null);
+
+      if (!hasData) {
+        if (!STATE.cachedLeadersHtml) {
+          dom.leadersContainer.innerHTML = `<div class="col-span-3 text-center text-xs text-court-muted py-2">Stats accumulating...</div>`; 
+        }
+        return;
+      }
+
+      const newHtml = cats.map(cat => {
+        const topA = awayL[cat.id];
+        const topH = homeL[cat.id];
+        return `
+          <div class="bg-court-card/70 rounded-xl p-2.5 border border-court-border flex flex-col justify-between">
+            <span class="text-[10px] font-mono uppercase font-black text-court-muted tracking-wider text-center mb-1">${cat.name}</span>
+            <div class="flex items-center justify-between text-xs font-mono gap-1">
+              <div class="flex items-center gap-1 min-w-0">
+                <span class="font-bold text-gray-300 text-[11px] truncate max-w-[65px]">${topA?.shortName || 'N/A'}</span>
+                <span class="font-black text-court-teal">${topA?.displayValue ?? '-'}</span>
+              </div>
+              <span class="text-court-border text-[10px]">•</span>
+              <div class="flex items-center gap-1 justify-end min-w-0">
+                <span class="font-black text-court-pink">${topH?.displayValue ?? '-'}</span>
+                <span class="font-bold text-gray-300 text-[11px] truncate max-w-[65px]">${topH?.shortName || 'N/A'}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      if (STATE.cachedLeadersHtml !== newHtml) {
+        STATE.cachedLeadersHtml = newHtml;
+        dom.leadersContainer.innerHTML = newHtml;
+      }
+    }
+
+    function updateMomentum(plays, awayComp, homeComp) {
+      const sp = plays.filter(p => p.scoreValue > 0).slice(-12);
+      if (sp.length === 0) return;
+      const aId = awayComp?.team?.id;
+      const hId = homeComp?.team?.id;
+      const awayCode = awayComp?.team?.abbreviation || 'AWY';
+      const homeCode = homeComp?.team?.abbreviation || 'HME';
+      let aPts = 0, hPts = 0;
+      sp.forEach(p => { p.teamId === aId ? (aPts += p.scoreValue) : (hPts += p.scoreValue); });
+      const tot = aPts + hPts, aPct = tot ? Math.round((aPts/tot)*100) : 50, hPct = 100 - aPct;
+      
+      // Fetch dynamic team colors
+      const awayTeamInfo = NBA_TEAMS.find(t => t.id === aId) || { color: '#00B2A9' };
+      const homeTeamInfo = NBA_TEAMS.find(t => t.id === hId) || { color: '#EF426F' };
+
+      // Apply dynamic colors to the fills
+      dom.momentumFillAway.style.width = `${aPct}%`; 
+      dom.momentumFillAway.style.backgroundColor = awayTeamInfo.color;
+      dom.momentumFillHome.style.width = `${hPct}%`;
+      dom.momentumFillHome.style.backgroundColor = homeTeamInfo.color;
+      
+      // Apply dynamic colors to the labels
+      dom.momentumLabelAway.innerText = `${awayCode} ${aPts}pts (${aPct}%)`; 
+      dom.momentumLabelAway.style.color = awayTeamInfo.color;
+      dom.momentumLabelHome.innerText = `${hPts}pts (${hPct}%) ${homeCode}`;
+      dom.momentumLabelHome.style.color = homeTeamInfo.color;
+      
+      const txt = dom.momentumSwingText;
+      if (aPts >= hPts + 5) { 
+        txt.innerText = `${awayCode} +${aPts-hPts} SWING 🔥`; 
+        txt.className = "text-[10px] font-mono font-bold uppercase animate-pulse"; 
+        txt.style.color = awayTeamInfo.color;
+      }
+      else if (hPts >= aPts + 5) { 
+        txt.innerText = `${homeCode} +${hPts-aPts} SWING 🔥`; 
+        txt.className = "text-[10px] font-mono font-bold uppercase animate-pulse"; 
+        txt.style.color = homeTeamInfo.color;
+      }
+      else { 
+        txt.innerText = "EVEN FLOW"; 
+        txt.className = "text-[10px] font-mono font-bold text-gray-400 uppercase"; 
+        txt.style.color = ''; // clear explicit color to fall back to text-gray-400
+      }
+    }
+
+    function classifyPlay(text, p, prev) {
+      const l = (text||'').toLowerCase();
+      let tags = [], big = false, label = null, icon = null, bClass = "";
+      
+      if (l.includes('dunk') || l.includes('slam') || l.includes('alley-oop')) {
+        tags.push('dunk_block', 'big', 'scoring'); big = true; label = 'MONSTER DUNK'; icon = '🔨'; bClass = 'bg-court-orange/20 text-court-orange border-court-orange/40';
+      } else if (l.includes('block') || l.includes('swat')) {
+        tags.push('dunk_block', 'big'); big = true; label = 'SWAT / BLOCK'; icon = '🚫'; bClass = 'bg-rose-500/20 text-rose-400 border-rose-500/40';
+      } else if (l.includes('three point') || l.includes('3-point') || l.includes('3pt')) {
+        tags.push('three');
+        if (l.includes('makes') || p.scoreValue > 0) {
+          tags.push('big', 'scoring'); big = true; label = '3-POINTER'; icon = '🎯'; bClass = 'bg-cyan-400/20 text-cyan-300 border-cyan-400/40';
+        }
+      } else if (l.includes('steal') && (l.includes('layup') || l.includes('dunk'))) {
+        tags.push('big', 'scoring'); big = true; label = 'STEAL & RUN'; icon = '⚡'; bClass = 'bg-purple-400/20 text-purple-300 border-purple-400/40';
+      } else if (l.includes('and-1') || l.includes('and 1')) {
+        tags.push('big', 'scoring'); big = true; label = 'AND-ONE'; icon = '🔥'; bClass = 'bg-court-pink/20 text-court-pink border-court-pink/40';
+      }
+      
+      if (p.scoreValue > 0 || l.includes('makes')) tags.push('scoring');
+
+      if (prev && p.homeScore !== undefined && p.awayScore !== undefined) {
+        const pd = (prev.homeScore||0) - (prev.awayScore||0), cd = (p.homeScore||0) - (p.awayScore||0);
+        if ((pd <= 0 && cd > 0) || (pd >= 0 && cd < 0)) {
+          tags.push('lead_change', 'big'); big = true; 
+          if(!label) { label = 'LEAD CHANGE'; icon = '🔄'; bClass = 'bg-emerald-400/20 text-emerald-300 border-emerald-400/40'; }
+        } else if (cd === 0 && pd !== 0) {
+          tags.push('lead_change', 'big'); big = true;
+          if(!label) { label = 'GAME TIED'; icon = '⚖️'; bClass = 'bg-amber-400/20 text-amber-300 border-amber-400/40'; }
+        }
+      }
+      return { big, tags, label, icon, bClass };
+    }
+
+    function processPlays(rawPlays) {
+      if (!rawPlays.length) return;
+      let prev = null, processed = [];
+      rawPlays.forEach((rp, i) => {
+        const text = rp.text || '';
+        const p = {
+          id: rp.id || `p-${i}`, period: rp.period?.number || 1, clock: rp.clock?.displayValue || '0:00',
+          text, teamId: rp.team?.id, homeScore: rp.homeScore, awayScore: rp.awayScore,
+          coordinate: rp.coordinate, // Inject X/Y mapping for Shot Chart
+          scoreValue: rp.scoreValue || (rp.scoringPlay ? (text.toLowerCase().includes('three') ? 3 : (text.toLowerCase().includes('free throw') ? 1 : 2)) : 0)
+        };
+        const c = classifyPlay(text, p, prev);
+        Object.assign(p, { isBig: c.big, tags: c.tags, badgeLabel: c.label, badgeIcon: c.icon, badgeClass: c.bClass });
+        STATE.seenPlayIds.add(p.id); processed.push(p); prev = p;
+      });
+      STATE.plays = processed;
+      evaluateRuns(processed);
+      renderShotChart(processed);
+      renderFeed();
+    }
+
+    function renderShotChart(plays) {
+      if (!dom.shotPlots) return;
+      
+      const shots = plays.filter(p => p.coordinate && p.coordinate.x !== undefined && p.coordinate.y !== undefined && (p.text.toLowerCase().includes('shot') || p.text.toLowerCase().includes('layup') || p.text.toLowerCase().includes('dunk') || p.text.toLowerCase().includes('jumper')));
+      const sId = STATE.selectedTeamId;
+      
+      dom.shotPlots.innerHTML = shots.map(s => {
+        const isMake = s.scoreValue > 0 || s.text.toLowerCase().includes('makes');
+        let x = s.coordinate.x; // 0 to 50 width
+        let y = s.coordinate.y; // 0 to 94 length
+        
+        // Normalize coordinates to one half-court
+        if (y > 47) y = 94 - y;
+        
+        const pctX = (x / 50) * 100;
+        const pctY = (y / 47) * 100;
+        
+        const colorClass = isMake ? 'bg-emerald-400' : 'bg-rose-500';
+        const opacity = s.teamId === sId ? 'opacity-100 shadow-[0_0_5px_currentColor]' : 'opacity-40';
+        const size = isMake ? 'w-2 h-2' : 'w-1.5 h-1.5';
+        
+        // Plot dot from bottom-left corner of our half-court container
+        return `<div class="absolute rounded-full ${colorClass} ${opacity} ${size} -translate-x-1/2 -translate-y-1/2 cursor-pointer transition hover:scale-150" style="left: ${pctX}%; bottom: ${pctY}%;" title="${s.text}"></div>`;
+      }).join('');
+    }
+
+    function evaluateRuns(plays) {
+      const sp = plays.filter(p => p.scoreValue > 0).slice(-8);
+      if (sp.length < 3) { dom.runAlertBanner.classList.add('hidden'); return; }
+      let myPts = 0, oppPts = 0;
+      sp.forEach(p => p.teamId === STATE.selectedTeamId ? (myPts += p.scoreValue) : (oppPts += p.scoreValue));
+      if (myPts >= 10 && oppPts <= 2) {
+        dom.runAlertBanner.classList.remove('hidden');
+        dom.runAlertText.innerText = `YOUR TEAM ON A ${myPts}-${oppPts} RUN!`;
+      } else { dom.runAlertBanner.classList.add('hidden'); }
+    }
+
+    function renderFeed() {
+      const f = STATE.activeFilter, sId = STATE.selectedTeamId;
+      dom.bigPlaysCountBadge.innerText = `${STATE.plays.filter(p => p.isBig).length} Big Plays`;
+      
+      const filtered = STATE.plays.filter(p => {
+        if (f === 'all') return true;
+        if (f === 'big') return p.isBig;
+        if (f === 'scoring') return p.tags?.includes('scoring');
+        if (f === 'three') return p.tags?.includes('three');
+        if (f === 'dunk_block') return p.tags?.includes('dunk_block');
+        if (f === 'lead_change') return p.tags?.includes('lead_change');
+        return true;
+      });
+      dom.feedCounter.innerText = `${filtered.length} plays logged`;
+
+      if (!filtered.length) {
+        dom.feedContainer.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-court-muted"><i data-lucide="filter" class="w-8 h-8 mb-2"></i>No plays match filter.</div>`;
+        lucide.createIcons(); return;
+      }
+
+      const wasAtTop = dom.feedContainer.scrollTop < 40;
+      dom.feedContainer.innerHTML = [...filtered].reverse().map(p => {
+        const isMine = p.teamId === sId;
+        const team = NBA_TEAMS.find(t => t.id === p.teamId);
+        const code = team?.tricode || (isMine ? 'TEAM' : '');
+        const color = team?.color || (isMine ? '#00B2A9' : '#2a3242');
+
+        return `
+          <div class="p-3 rounded-xl border border-court-border bg-court-card transition flex flex-col gap-1 relative overflow-hidden" style="border-left: 4px solid ${color};">
+            <div class="flex items-center justify-between gap-2 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-court-muted font-bold">Q${p.period} ${p.clock}</span>
+                ${code ? `<span class="px-1.5 py-[1px] rounded text-[10px] font-mono font-bold bg-court-dark border border-court-border text-gray-300">${code}</span>` : ''}
+                ${p.badgeLabel ? `<span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase border flex items-center gap-1 ${p.badgeClass}"><span>${p.badgeIcon}</span> ${p.badgeLabel}</span>` : ''}
+              </div>
+              <div class="font-mono text-xs font-bold text-gray-400">
+                <span class="${p.homeScore > p.awayScore ? 'text-white font-black' : ''}">${p.homeScore ?? '-'}</span>
+                <span class="mx-0.5 text-court-border">-</span>
+                <span class="${p.awayScore > p.homeScore ? 'text-white font-black' : ''}">${p.awayScore ?? '-'}</span>
+              </div>
+            </div>
+            <p class="text-sm ${isMine ? 'text-white font-semibold' : 'text-gray-300 font-medium'} leading-snug">${p.text}</p>
+          </div>
+        `;
+      }).join('');
+      
+      if (STATE.autoScroll && wasAtTop) dom.feedContainer.scrollTop = 0;
+      lucide.createIcons();
+    }
+
+    function renderOffDayView() {
+      dom.scoreboardSection.classList.add('hidden'); dom.feedSection.classList.add('hidden');
+      dom.gameStatsStrip.classList.add('hidden'); dom.offDayBanner.classList.remove('hidden');
+      dom.livePill.className = "flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-court-card border border-court-border text-court-muted font-mono font-bold text-[11px]";
+      dom.livePillText.innerText = "OFF DAY";
+      
+      const team = NBA_TEAMS.find(t => t.id === STATE.selectedTeamId) || { name: 'Team' };
+      dom.offDayTitle.innerText = `No Game Scheduled for ${team.name}`;
+      
+      dom.activeMatchupsGrid.innerHTML = STATE.allEventsToday.length ? STATE.allEventsToday.map(ev => {
+        const away = ev.competitions?.[0]?.competitors?.find(c=>c.homeAway==='away') || {};
+        const home = ev.competitions?.[0]?.competitors?.find(c=>c.homeAway==='home') || {};
+        const isLive = ev.status?.type?.state === 'in';
+        return `
+          <div onclick="switchGame('${ev.id}')" class="p-3 bg-court-dark hover:bg-court-card border border-court-border rounded-xl cursor-pointer transition flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-xs text-white">${away.team?.abbreviation}</span>
+              <span class="text-xs font-mono text-gray-400">${away.score ?? '-'}</span>
+              <span class="text-[10px] text-court-muted">@</span>
+              <span class="font-bold text-xs text-white">${home.team?.abbreviation}</span>
+              <span class="text-xs font-mono text-gray-400">${home.score ?? '-'}</span>
+            </div>
+            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold ${isLive ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-court-card text-court-muted'}">${isLive ? 'LIVE' : ev.status?.type?.shortDetail}</span>
+          </div>`;
+      }).join('') : `<div class="col-span-full text-center text-court-muted text-xs py-4">No active games right now.</div>`;
+    }
+
+    function setupEventListeners() {
+      // Toggle custom dropdown
+      dom.teamDropdownBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dom.teamDropdownMenu.classList.toggle('hidden');
+      });
+      
+      // Close custom dropdown on outside click
+      document.addEventListener('click', (e) => {
+        if (!dom.teamDropdownMenu.contains(e.target) && !dom.teamDropdownBtn.contains(e.target)) {
+          dom.teamDropdownMenu.classList.add('hidden');
+        }
+      });
+
+      dom.toggleGamesBtn.addEventListener('click', () => {
+        STATE.isTickerExpanded = !STATE.isTickerExpanded;
+        updateTickerState();
+      });
+
+      document.querySelectorAll('.filter-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.filter-tab').forEach(b => {
+            b.classList.remove('active', 'bg-white/10', 'text-white', 'border-white/20');
+            b.classList.add('bg-court-card', 'border-court-border');
+          });
+          btn.classList.add('active', 'bg-white/10', 'text-white', 'border-white/20');
+          btn.classList.remove('bg-court-card', 'border-court-border');
+          STATE.activeFilter = btn.getAttribute('data-filter'); renderFeed();
+        });
+      });
+      dom.autoScrollBtn.addEventListener('click', () => {
+        STATE.autoScroll = !STATE.autoScroll;
+        dom.autoScrollLabel.innerText = `Auto-Scroll: ${STATE.autoScroll ? 'ON' : 'OFF'}`;
+        dom.autoScrollBtn.classList.toggle('text-court-teal', STATE.autoScroll);
+        dom.autoScrollBtn.classList.toggle('text-gray-500', !STATE.autoScroll);
+      });
+      dom.refreshBtn.addEventListener('click', () => {
+        fetchScoreboardData(); if (STATE.activeEventId) fetchPlayByPlaySummary(STATE.activeEventId);
+      });
+    }
+
+    function startPollingLoop() {
+      fetchScoreboardData();
+      STATE.pollTimer = setInterval(() => { fetchScoreboardData(); }, STATE.pollIntervalMs);
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
