@@ -5,12 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NBA League Command Center</title>
   
-  <!-- PWA Manifest & Icons -->
-  <link rel="manifest" href="standings-manifest.json" id="pwaManifest">
+  <!-- Standard PWA Manifest & Icons -->
+  <link rel="manifest" href="standings-manifest.json">
   <meta name="theme-color" content="#0B0E14">
+  <link rel="apple-touch-icon" href="icon-192.png">
   
+  <!-- Tailwind & Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap');
     
@@ -66,6 +69,13 @@
           }
         }
       }
+    }
+    
+    // Standard Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(console.error);
+      });
     }
   </script>
 </head>
@@ -247,37 +257,9 @@
       toggleViewText: document.getElementById('toggleViewText')
     };
 
-    // --- PWA Initialization ---
-    function initPWA() {
-      const manifest = {
-        name: "League Command Center",
-        short_name: "Standings",
-        start_url: ".",
-        display: "standalone",
-        background_color: "#0f172a",
-        theme_color: "#1e293b",
-        icons: [{ src: "https://placehold.co/192x192/1e293b/ffffff?text=LCC", sizes: "192x192", type: "image/png" }]
-      };
-      const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-      document.getElementById('pwaManifest').href = URL.createObjectURL(manifestBlob);
-
-      const swCode = `
-        self.addEventListener('install', e => self.skipWaiting());
-        self.addEventListener('activate', e => self.clients.claim());
-        self.addEventListener('fetch', e => {
-            if (e.request.url.includes('api.espn.com')) return; // Never cache live APIs
-        }); 
-      `;
-      const swBlob = new Blob([swCode], { type: 'application/javascript' });
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(console.error);
-      }
-    }
-
     // --- Initialization ---
     async function init() {
       lucide.createIcons();
-      initPWA();
       setupEventListeners();
       
       // Initial robust data load
@@ -329,7 +311,7 @@
         dom.standingsContainer.classList.add('flex');
         renderDashboard();
         
-        // Fetch upcoming schedules for the next 10 days using a date range scoreboard query
+        // Fetch upcoming schedules safely (6 days to avoid 400 error)
         fetchUpcomingSchedule();
       } catch (err) {
         console.error("Boot Sequence Error:", err);
@@ -452,12 +434,15 @@
       try {
         const d = new Date();
         const start = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
-        d.setDate(d.getDate() + 7);
+        
+        // Using a 6-day lookahead strictly to avoid ESPN's 400 Bad Request error
+        d.setDate(d.getDate() + 6);
         const end = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
         
         const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${start}-${end}`);
-        const data = await res.json();
+        if (!res.ok) throw new Error("Schedule HTTP error");
         
+        const data = await res.json();
         STATE.nextEvents = {}; // Reset
 
         if (data.events) {
