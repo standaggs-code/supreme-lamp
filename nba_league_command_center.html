@@ -511,7 +511,6 @@ async function openRosterModal(teamId, teamName, logoUrl) {
         const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${teamId}/roster`);
         const data = await res.json();
 
-        // FIX: ESPN nests the player list inside athletes[0].items
         const players = data.athletes?.[0]?.items || [];
 
         if (players.length === 0) {
@@ -531,7 +530,6 @@ async function openRosterModal(teamId, teamName, logoUrl) {
             const tr = document.createElement('tr');
             tr.className = 'border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors text-sm';
             
-            // Handle potentially missing nested stats gracefully
             const age = player.age || '-';
             const height = player.displayHeight || '-';
             const weight = player.displayWeight || '-';
@@ -557,41 +555,7 @@ async function openRosterModal(teamId, teamName, logoUrl) {
         noData.textContent = 'Failed to load roster data.';
     }
 }
-
-        const rowsHtml = athletes.map(p => `
-          <tr class="border-b border-court-border/40 hover:bg-white/5 transition-colors">
-            <td class="py-2.5 px-4 font-mono font-bold text-gray-400 w-12">${p.jersey || '-'}</td>
-            <td class="py-2.5 px-4 font-bold text-white whitespace-nowrap">${p.displayName || p.fullName}</td>
-            <td class="py-2.5 px-4 text-center text-gray-400 font-mono text-xs">${p.position?.abbreviation || '-'}</td>
-            <td class="py-2.5 px-4 text-center text-gray-400 font-mono text-xs whitespace-nowrap">${p.displayHeight || '-'}</td>
-            <td class="py-2.5 px-4 text-center text-gray-400 font-mono text-xs whitespace-nowrap">${p.displayWeight || '-'}</td>
-            <td class="py-2.5 px-4 text-center text-gray-400 font-mono text-xs">${p.age || '-'}</td>
-            <td class="py-2.5 px-4 text-center text-gray-400 font-mono text-xs">${p.experience?.years || 'R'}</td>
-          </tr>
-        `).join('');
-
-        content.innerHTML = `
-          <table class="w-full text-left border-collapse min-w-[500px]">
-            <thead class="sticky top-0 bg-[#11151E] shadow-md z-10">
-              <tr class="text-[10px] font-mono text-gray-500 uppercase tracking-widest border-b border-court-border">
-                <th class="py-2 px-4 font-bold w-12">#</th>
-                <th class="py-2 px-4 font-bold">Player Name</th>
-                <th class="py-2 px-4 font-bold text-center">Pos</th>
-                <th class="py-2 px-4 font-bold text-center">Height</th>
-                <th class="py-2 px-4 font-bold text-center">Weight</th>
-                <th class="py-2 px-4 font-bold text-center">Age</th>
-                <th class="py-2 px-4 font-bold text-center">Exp</th>
-              </tr>
-            </thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-        `;
-      } catch (err) {
-        console.error("Error fetching roster:", err);
-        content.innerHTML = `<div class="p-8 text-center text-red-400 font-mono text-sm">Failed to load roster data. Please try again.</div>`;
-      }
-    };
-
+    
     window.closeRosterModal = function() {
       const modal = document.getElementById('rosterModal');
       modal.classList.add('hidden');
